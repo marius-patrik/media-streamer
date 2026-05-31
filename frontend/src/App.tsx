@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, Folder, Server, Volume2, Cloud, Search, Info, X, 
-  Tv, Film, Copy, Check, HardDrive, RefreshCw, Layers, Cpu, Network, Key
+  Tv, Film, Copy, Check, HardDrive, RefreshCw, Layers, Cpu, Network, Key, Star, Sparkles, ChevronLeft, ChevronRight, Share2, HelpCircle
 } from 'lucide-react';
 import './App.css';
 
@@ -15,7 +15,7 @@ interface MediaFile {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'local' | 'cloud' | 'topology'>('local');
+  const [activeTab, setActiveTab] = useState<'local' | 'cloud' | 'topology'>('cloud'); // Default to Cloud Cinema (cineby grade home)
   const [localMedia, setLocalMedia] = useState<MediaFile[]>([]);
   const [localLoading, setLocalLoading] = useState(true);
   const [currentLocalPlay, setCurrentLocalPlay] = useState<MediaFile | null>(null);
@@ -44,8 +44,12 @@ export default function App() {
   // Transcode state
   const [shouldTranscode, setShouldTranscode] = useState(true);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  
+  // Immersive details drawer state
+  const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [credits, setCredits] = useState<any>(null);
 
-  // Load trending media & local catalog
   useEffect(() => {
     fetchLocalLibrary();
     if (tmdbKey) {
@@ -102,6 +106,21 @@ export default function App() {
       console.error("Error searching TMDb", e);
     }
     setSearchLoading(false);
+  };
+
+  const loadMediaDetails = async (item: any) => {
+    if (!tmdbKey) return;
+    setSelectedDetailItem(item);
+    setDetailLoading(true);
+    try {
+      const type = item.media_type || (item.name ? 'tv' : 'movie');
+      const creditsRes = await fetch(`https://api.themoviedb.org/3/${type}/${item.id}/credits?api_key=${tmdbKey}`);
+      const creditsData = await creditsRes.json();
+      setCredits(creditsData);
+    } catch (e) {
+      console.error("Error loading credits", e);
+    }
+    setDetailLoading(false);
   };
 
   const saveApiKey = () => {
@@ -197,30 +216,30 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen text-slate-100 pb-20 select-none">
+    <div className="min-h-screen text-slate-100 pb-24 select-none relative backdrop-blur-overlay">
       {/* Dynamic Header */}
-      <header className="flex justify-between items-center px-8 py-5 border-b border-white/10 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="flex items-center gap-3 font-extrabold text-2xl tracking-tight bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">
-          <Play className="w-8 h-8 text-violet-500 fill-violet-500" />
+      <header className="flex justify-between items-center px-10 py-5 border-b border-white/5 bg-slate-950/70 backdrop-blur-2xl sticky top-0 z-50 transition-all duration-300">
+        <div className="flex items-center gap-3 font-extrabold text-2xl tracking-tight bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-500 bg-clip-text text-transparent cursor-pointer">
+          <Play className="w-8 h-8 text-violet-500 fill-violet-500 drop-shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
           <span>TailStreamer</span>
         </div>
         
-        <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
+        <div className="flex bg-white/5 p-1 rounded-full border border-white/10 shadow-inner">
           <button 
             onClick={() => setActiveTab('local')}
-            className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold text-sm transition-all duration-300 ${activeTab === 'local' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/20' : 'text-slate-400 hover:text-white'}`}
+            className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-sm transition-all duration-300 ${activeTab === 'local' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/35' : 'text-slate-400 hover:text-white'}`}
           >
-            <Server className="w-4 h-4" /> Local Library
+            <Server className="w-4 h-4" /> Local HDD
           </button>
           <button 
             onClick={() => setActiveTab('cloud')}
-            className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold text-sm transition-all duration-300 ${activeTab === 'cloud' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/20' : 'text-slate-400 hover:text-white'}`}
+            className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-sm transition-all duration-300 ${activeTab === 'cloud' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/35' : 'text-slate-400 hover:text-white'}`}
           >
             <Cloud className="w-4 h-4" /> Cloud Cinema
           </button>
           <button 
             onClick={() => setActiveTab('topology')}
-            className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold text-sm transition-all duration-300 ${activeTab === 'topology' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/20' : 'text-slate-400 hover:text-white'}`}
+            className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-sm transition-all duration-300 ${activeTab === 'topology' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/35' : 'text-slate-400 hover:text-white'}`}
           >
             <Network className="w-4 h-4" /> Mesh Topology
           </button>
@@ -232,29 +251,29 @@ export default function App() {
               setKeyInput(tmdbKey);
               setShowKeyModal(true);
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs border transition-all ${tmdbKey ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs border transition-all hover:scale-105 duration-200 ${tmdbKey ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse'}`}
           >
-            <Key className="w-4 h-4" /> {tmdbKey ? "TMDb Connected" : "Connect TMDb API"}
+            <Key className="w-4 h-4" /> {tmdbKey ? "TMDb Live" : "Connect TMDb API"}
           </button>
           <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
-            Tailscale Live
+            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+            Tailscale VPN
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="max-w-[1440px] mx-auto px-6 mt-8">
+      <main className="max-w-[1440px] mx-auto px-10 mt-8">
         
         {/* TAB 1: LOCAL MEDIA CENTER */}
         {activeTab === 'local' && (
-          <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-10">
             {/* Folder Tree Sidebar */}
-            <div className="glass-panel p-6 rounded-3xl flex flex-col h-[75vh]">
-              <div className="flex items-center justify-between mb-6">
+            <div className="glass-panel p-6 rounded-3xl flex flex-col h-[78vh] shadow-2xl">
+              <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
                 <h3 className="font-extrabold text-xl flex items-center gap-2">
                   <Folder className="w-5 h-5 text-amber-500 fill-amber-500" />
-                  Local HDD Media
+                  Local Libraries
                 </h3>
                 <button 
                   onClick={fetchLocalLibrary}
@@ -288,7 +307,7 @@ export default function App() {
             </div>
 
             {/* Custom Video Player Panel */}
-            <div className="glass-panel p-6 rounded-3xl flex flex-col min-h-[500px]">
+            <div className="glass-panel p-6 rounded-3xl flex flex-col min-h-[500px] shadow-2xl">
               <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
                 {currentLocalPlay ? (
                   <video 
@@ -306,8 +325,8 @@ export default function App() {
                 ) : (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-tr from-slate-950 via-slate-900 to-violet-950/40 text-slate-400 gap-4">
                     <Play className="w-16 h-16 text-violet-500/30 animate-pulse-slow" />
-                    <h3 className="font-bold text-lg text-slate-200">Ready to Stream Lossless Media</h3>
-                    <p className="text-sm text-slate-500">Select any video file from the Local HDD Library to start.</p>
+                    <h3 className="font-bold text-lg text-slate-200">Lossless HDD Streaming</h3>
+                    <p className="text-sm text-slate-500">Select any video file from the Local Library to start.</p>
                   </div>
                 )}
               </div>
@@ -333,7 +352,7 @@ export default function App() {
                     <div className="flex items-center gap-3">
                       <button 
                         onClick={() => setShouldTranscode(!shouldTranscode)}
-                        className={`px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 border transition-all ${shouldTranscode ? 'bg-violet-600/20 text-violet-300 border-violet-500/30' : 'bg-white/5 text-slate-400 border-white/10'}`}
+                        className={`px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 border transition-all ${shouldTranscode ? 'bg-violet-600/20 text-violet-300 border-violet-500/30 shadow-[0_0_15px_rgba(139,92,246,0.1)]' : 'bg-white/5 text-slate-400 border-white/10'}`}
                       >
                         <Volume2 className="w-4 h-4" /> Audio Transcoder: {shouldTranscode ? "ON (Recommended)" : "OFF"}
                       </button>
@@ -350,7 +369,7 @@ export default function App() {
                       <div className="flex items-start gap-3 bg-blue-500/5 border border-blue-500/10 p-4 rounded-2xl max-w-lg">
                         <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-blue-300/80 leading-relaxed">
-                          <strong>Browser Compatibility Layer Active</strong>: FFmpeg transcodes audio to dual-channel AAC on-the-fly. The video track is copied without compression.
+                          <strong>Browser Compatibility Active</strong>: Automatically downmixing AC3/DTS audio to stereo AAC on-the-fly. Zero video recompression.
                         </p>
                       </div>
                     )}
@@ -363,42 +382,52 @@ export default function App() {
 
         {/* TAB 2: CLOUD CINEMA (CINEBY FE PARITY) */}
         {activeTab === 'cloud' && (
-          <div className="flex flex-col gap-10">
+          <div className="flex flex-col gap-14">
+            
             {/* Setup message if TMDb Key is missing */}
             {!tmdbKey ? (
-              <div className="glass-panel p-12 rounded-3xl text-center max-w-2xl mx-auto flex flex-col items-center gap-6 border-amber-500/20">
+              <div className="glass-panel p-16 rounded-3xl text-center max-w-2xl mx-auto flex flex-col items-center gap-6 border-amber-500/20 shadow-2xl">
                 <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-400 animate-pulse">
                   <Key className="w-8 h-8" />
                 </div>
-                <h2 className="text-2xl font-black">TMDb API Connection Required</h2>
+                <h2 className="text-2xl font-black">TMDb Connection Required</h2>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  To search all movies and TV shows worldwide (even if they are not in your local library), please connect your free TMDb API key. It will be stored securely and privately in your browser's local storage.
+                  To experience a complete Cineby-grade library (trending lists, carousel navigation, and detailed info panels), please link your free TMDb API key. Everything stays client-side.
                 </p>
                 <button 
                   onClick={() => setShowKeyModal(true)}
-                  className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold px-8 py-3 rounded-full shadow-lg shadow-violet-500/20 transition-all hover:scale-105"
+                  className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold px-8 py-3 rounded-full shadow-lg shadow-violet-500/25 transition-all hover:scale-105"
                 >
                   Configure TMDb API Key
                 </button>
               </div>
             ) : (
               <>
-                {/* Premium Hero Section */}
+                {/* Premium IMAX Hero Section */}
                 {heroMovie && (
                   <div 
-                    className="relative h-[480px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-end p-12 bg-cover bg-center"
-                    style={{ backgroundImage: `linear-gradient(to top, rgba(10,5,27,1) 15%, rgba(10,5,27,0.4) 60%, transparent), url(https://image.tmdb.org/t/p/original${heroMovie.backdrop_path})` }}
+                    className="relative h-[550px] rounded-3xl overflow-hidden border border-white/5 shadow-2xl flex items-end p-16 bg-cover bg-center transition-all duration-500"
+                    style={{ backgroundImage: `linear-gradient(to top, rgba(5,2,12,1) 10%, rgba(5,2,12,0.3) 60%, transparent), url(https://image.tmdb.org/t/p/original${heroMovie.backdrop_path})` }}
                   >
-                    <div className="max-w-2xl">
-                      <span className="bg-violet-600/30 text-violet-300 border border-violet-500/20 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-4 inline-block">Trending Blockbuster</span>
-                      <h1 className="text-5xl font-black mb-3 tracking-tight">{heroMovie.title || heroMovie.name}</h1>
-                      <p className="text-slate-300 text-sm line-clamp-3 mb-6 leading-relaxed">{heroMovie.overview}</p>
+                    <div className="max-w-2xl relative z-10">
+                      <div className="flex gap-2.5 items-center mb-4">
+                        <span className="bg-violet-600/30 text-violet-300 border border-violet-500/20 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Featured blockbuster</span>
+                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/20 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Star className="w-3.5 h-3.5 fill-amber-300" /> {heroMovie.vote_average.toFixed(1)}</span>
+                      </div>
+                      <h1 className="text-6xl font-black mb-4 tracking-tight leading-none hero-text-glow">{heroMovie.title || heroMovie.name}</h1>
+                      <p className="text-slate-300 text-sm line-clamp-3 mb-8 leading-relaxed font-medium">{heroMovie.overview}</p>
                       <div className="flex gap-4">
                         <button 
                           onClick={() => launchCloudStream(heroMovie)}
-                          className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold px-8 py-3 rounded-full flex items-center gap-2 shadow-lg shadow-violet-500/25 transition-all hover:scale-105"
+                          className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black px-10 py-4 rounded-full flex items-center gap-2.5 shadow-xl shadow-violet-500/30 transition-all hover:scale-105"
                         >
                           <Play className="w-5 h-5 fill-white" /> Watch Now
+                        </button>
+                        <button 
+                          onClick={() => loadMediaDetails(heroMovie)}
+                          className="bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold px-8 py-4 rounded-full transition-all flex items-center gap-2"
+                        >
+                          <Info className="w-5 h-5" /> More Details
                         </button>
                       </div>
                     </div>
@@ -407,61 +436,67 @@ export default function App() {
 
                 {/* Advanced Search bar */}
                 <div className="max-w-2xl mx-auto w-full flex flex-col gap-6">
-                  <h2 className="text-3xl font-extrabold text-center tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Search Movies & TV Shows</h2>
-                  <div className="flex bg-white/5 border border-white/10 rounded-full p-2 items-center focus-within:border-violet-500 focus-within:shadow-[0_0_20px_rgba(139,92,246,0.15)] transition-all">
+                  <div className="flex bg-white/5 border border-white/10 rounded-full p-2 items-center focus-within:border-violet-500 focus-within:shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-all">
                     <Search className="w-6 h-6 text-slate-400 ml-4" />
                     <input 
                       type="text" 
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                      placeholder="Enter movie or show name (e.g. Stargate)..."
-                      className="flex-1 bg-transparent border-none text-white outline-none px-4 py-3 font-semibold"
+                      placeholder="Search movies, TV shows, and series..."
+                      className="flex-1 bg-transparent border-none text-white outline-none px-4 py-3 font-semibold text-lg"
                     />
                     <button 
                       onClick={handleSearch}
-                      className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold px-8 py-3 rounded-full transition-all shadow-md shadow-violet-500/20"
+                      className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black px-8 py-3 rounded-full transition-all shadow-md shadow-violet-500/20"
                     >
                       Search
                     </button>
                   </div>
                 </div>
 
-                {/* Results Shelf */}
+                {/* Search Results */}
                 {searchResults.length > 0 && (
                   <div>
-                    <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2">Search Results</h3>
+                    <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2 tracking-tight">Search Results</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                       {searchResults.map((item, idx) => (
-                        <MediaCard key={idx} item={item} onSelect={launchCloudStream} localCheck={findLocalMatch} />
+                        <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Trending Shelf (Movies) */}
-                <div>
-                  <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2">
-                    <Film className="w-6 h-6 text-violet-400" />
-                    Trending Movies
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                    {trendingMovies.map((item, idx) => (
-                      <MediaCard key={idx} item={item} onSelect={launchCloudStream} localCheck={findLocalMatch} />
-                    ))}
+                {/* Categories shelves (Cineby styling) */}
+                <div className="flex flex-col gap-12">
+                  {/* Trending Movies Shelf */}
+                  <div>
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="font-black text-2xl flex items-center gap-2.5 tracking-tight">
+                        <Film className="w-6 h-6 text-violet-400" />
+                        Trending Movies
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                      {trendingMovies.slice(0, 12).map((item, idx) => (
+                        <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Trending Shelf (TV Shows) */}
-                <div>
-                  <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2">
-                    <Tv className="w-6 h-6 text-fuchsia-400" />
-                    Popular TV Shows
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                    {trendingTv.map((item, idx) => (
-                      <MediaCard key={idx} item={item} onSelect={launchCloudStream} localCheck={findLocalMatch} />
-                    ))}
+                  {/* Popular TV Shows Shelf */}
+                  <div>
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="font-black text-2xl flex items-center gap-2.5 tracking-tight">
+                        <Tv className="w-6 h-6 text-fuchsia-400" />
+                        Popular TV Shows
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                      {trendingTv.slice(0, 12).map((item, idx) => (
+                        <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
+                      ))}
+                    </div>
                   </div>
                 </div>
               </>
@@ -482,7 +517,6 @@ export default function App() {
             </p>
 
             <div className="flex flex-col md:flex-row items-center justify-between gap-12 max-w-5xl w-full">
-              {/* Node 1 */}
               <motion.div 
                 whileHover={{ scale: 1.05 }}
                 className="glass-panel p-6 rounded-2xl flex flex-col items-center w-64 text-center border-violet-500/20"
@@ -497,7 +531,6 @@ export default function App() {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-950 px-2 py-0.5 rounded-full border border-violet-500/30 text-[10px] text-violet-400 font-bold uppercase">Tailnet</div>
               </div>
 
-              {/* Node 2 */}
               <motion.div 
                 whileHover={{ scale: 1.05 }}
                 className="glass-panel p-6 rounded-2xl flex flex-col items-center w-64 text-center border-fuchsia-500/20"
@@ -512,7 +545,6 @@ export default function App() {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-950 px-2 py-0.5 rounded-full border border-fuchsia-500/30 text-[10px] text-fuchsia-400 font-bold uppercase">SATA</div>
               </div>
 
-              {/* Node 3 */}
               <motion.div 
                 whileHover={{ scale: 1.05 }}
                 className="glass-panel p-6 rounded-2xl flex flex-col items-center w-64 text-center border-amber-500/20"
@@ -590,24 +622,27 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* CLOUD STREAM DETAIL MODAL (CINEBY FE FEATURE PARITY) */}
+      {/* CLOUD STREAM DETAIL MODAL (CINEBY PLAYER PARITY) */}
       <AnimatePresence>
         {activeModalItem && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[1000] flex justify-center items-center p-6 md:p-12 overflow-y-auto"
+            className="fixed inset-0 bg-slate-950/98 backdrop-blur-xl z-[1000] flex justify-center items-center p-4 md:p-8 overflow-y-auto"
           >
             <motion.div 
-              initial={{ scale: 0.95, y: 20 }}
+              initial={{ scale: 0.96, y: 15 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 20 }}
-              className="max-w-[1100px] w-full flex flex-col gap-6"
+              exit={{ scale: 0.96, y: 15 }}
+              className="max-w-[1200px] w-full flex flex-col gap-5"
             >
               {/* Modal Header */}
               <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-black text-slate-100">{activeModalItem.title || activeModalItem.name}</h2>
+                <div className="flex gap-4 items-center">
+                  <h2 className="text-3xl font-black tracking-tight text-slate-100">{activeModalItem.title || activeModalItem.name}</h2>
+                  <span className="text-xs bg-violet-600/30 text-violet-300 border border-violet-500/20 px-3 py-1 rounded-full font-extrabold uppercase">Watching Cloud Cinema</span>
+                </div>
                 <button 
                   onClick={() => setActiveModalItem(null)}
                   className="p-3 bg-white/5 hover:bg-red-500/20 hover:text-red-400 rounded-full border border-white/10 transition-all"
@@ -617,7 +652,7 @@ export default function App() {
               </div>
 
               {/* Player Frame */}
-              <div className="w-full aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative">
+              <div className="w-full aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-[0_30px_70px_rgba(0,0,0,0.8)] relative">
                 <iframe 
                   src={
                     activeModalItem.media_type === 'tv' || (!activeModalItem.media_type && activeModalItem.name)
@@ -634,23 +669,15 @@ export default function App() {
               </div>
 
               {/* Controls, Metadata and Selector */}
-              <div className="glass-panel p-8 rounded-3xl flex flex-col md:flex-row justify-between gap-8 items-start">
+              <div className="glass-panel p-8 rounded-3xl flex flex-col md:flex-row justify-between gap-8 items-center">
                 <div className="flex-1">
-                  <div className="flex flex-wrap gap-3 items-center mb-4">
-                    <span className="bg-violet-600/30 text-violet-300 border border-violet-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase">TMDb Catalog</span>
-                    {findLocalMatch(activeModalItem.title || activeModalItem.name) && (
-                      <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5" /> Available Locally
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-slate-300 text-sm leading-relaxed max-w-3xl">{activeModalItem.overview}</p>
+                  <p className="text-slate-300 text-sm leading-relaxed max-w-3xl font-medium">{activeModalItem.overview}</p>
                 </div>
 
-                <div className="flex flex-col gap-6 w-full md:w-80">
+                <div className="flex flex-col gap-5 w-full md:w-80 flex-shrink-0">
                   {/* Provider toggle */}
                   <div>
-                    <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-2">Select Player Provider</span>
+                    <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-2">Mirror Node Server</span>
                     <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
                       <button 
                         onClick={() => setActiveProvider('su')}
@@ -671,7 +698,7 @@ export default function App() {
                   {(activeModalItem.media_type === 'tv' || (!activeModalItem.media_type && activeModalItem.name)) && (
                     <div className="flex gap-4">
                       <div className="flex-1">
-                        <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-2">Season</span>
+                        <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-2">Season</span>
                         <select 
                           value={selectedSeason} 
                           onChange={(e) => {
@@ -687,7 +714,7 @@ export default function App() {
                         </select>
                       </div>
                       <div className="flex-1">
-                        <span className="text-xs text-slate-500 font-bold uppercase tracking-wider block mb-2">Episode</span>
+                        <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-2">Episode</span>
                         <select 
                           value={selectedEpisode} 
                           onChange={(e) => setSelectedEpisode(parseInt(e.target.value))}
@@ -706,10 +733,114 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* DETAILED INFO DRAWER (CINEBY DETAIL POPUP PARITY) */}
+      <AnimatePresence>
+        {selectedDetailItem && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/85 backdrop-blur-md z-[900] flex justify-end"
+            onClick={() => setSelectedDetailItem(null)}
+          >
+            <motion.div 
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="w-full max-w-[650px] h-full bg-slate-950 border-l border-white/10 shadow-2xl relative flex flex-col overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Backdrop image banner */}
+              <div 
+                className="h-80 w-full bg-cover bg-center relative"
+                style={{ backgroundImage: `linear-gradient(to top, #020108, transparent), url(https://image.tmdb.org/t/p/original${selectedDetailItem.backdrop_path})` }}
+              >
+                <button 
+                  onClick={() => setSelectedDetailItem(null)}
+                  className="absolute top-6 right-6 p-2 bg-slate-950/80 hover:bg-slate-900 border border-white/10 text-slate-300 hover:text-white rounded-full transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Content Detail Info */}
+              <div className="p-8 flex-1 flex flex-col gap-6">
+                <div>
+                  <div className="flex gap-2 items-center mb-3">
+                    <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Star className="w-3.5 h-3.5 fill-amber-400" /> {selectedDetailItem.vote_average ? selectedDetailItem.vote_average.toFixed(1) : "N/A"}</span>
+                    <span className="text-xs text-slate-400 font-bold">{(selectedDetailItem.release_date || selectedDetailItem.first_air_date || '').substring(0, 4)}</span>
+                  </div>
+                  <h2 className="text-4xl font-black tracking-tight">{selectedDetailItem.title || selectedDetailItem.name}</h2>
+                </div>
+
+                <div>
+                  <h4 className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-2">Overview</h4>
+                  <p className="text-slate-300 text-sm leading-relaxed font-medium">{selectedDetailItem.overview}</p>
+                </div>
+
+                {/* Local matching indicator */}
+                {findLocalMatch(selectedDetailItem.title || selectedDetailItem.name) && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center justify-between">
+                    <div className="flex items-start gap-3">
+                      <Check className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="text-sm text-emerald-400 block font-bold">Available in Local HDD</strong>
+                        <span className="text-xs text-slate-400 font-medium">You can stream this file directly without cloud delay.</span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const localItem = findLocalMatch(selectedDetailItem.title || selectedDetailItem.name);
+                        if (localItem) {
+                          triggerLocalPlay(localItem);
+                          setActiveTab('local');
+                          setSelectedDetailItem(null);
+                        }
+                      }}
+                      className="px-5 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white font-extrabold text-xs transition"
+                    >
+                      Play Local
+                    </button>
+                  </div>
+                )}
+
+                {/* Cast / Credits section */}
+                {credits && credits.cast && (
+                  <div>
+                    <h4 className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3">Starring Cast</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {credits.cast.slice(0, 8).map((actor: any, idx: number) => (
+                        <span key={idx} className="bg-white/5 border border-white/5 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-300">
+                          {actor.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-auto pt-8 border-t border-white/5">
+                  <button 
+                    onClick={() => {
+                      launchCloudStream(selectedDetailItem);
+                      setSelectedDetailItem(null);
+                    }}
+                    className="w-full py-4 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-violet-500/25 transition-all hover:scale-102"
+                  >
+                    <Play className="w-5 h-5 fill-white" /> Watch Cloud Cinema
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
+// Media Card Component (TMDb grid element)
 function MediaCard({ item, onSelect, localCheck }: { item: any, onSelect: (x: any) => void, localCheck: (x: string) => MediaFile | null }) {
   const title = item.title || item.name;
   const year = (item.release_date || item.first_air_date || '').substring(0, 4);
@@ -732,8 +863,8 @@ function MediaCard({ item, onSelect, localCheck }: { item: any, onSelect: (x: an
       )}
       
       {localMatch && (
-        <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-0.5">
-          <Check className="w-2.5 h-2.5" /> Local
+        <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-0.5 shadow-lg shadow-emerald-500/20">
+          <Check className="w-2.5 h-2.5" /> Lossless
         </div>
       )}
 
@@ -745,6 +876,7 @@ function MediaCard({ item, onSelect, localCheck }: { item: any, onSelect: (x: an
   );
 }
 
+// Sidebar Directory Tree File Node Component
 function TreeItemNode({ item, onSelect, selectedItem }: { item: MediaFile, onSelect: (x: MediaFile) => void, selectedItem: MediaFile | null }) {
   const [isOpen, setIsOpen] = useState(false);
   const isSelected = selectedItem && selectedItem.path === item.path;
