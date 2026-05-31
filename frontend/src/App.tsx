@@ -1,13 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, Folder, Server, Volume2, Cloud, Search, Info, X, 
-  Tv, Film, Copy, Check, HardDrive, RefreshCw, Layers, Cpu, Network
+  Tv, Film, Copy, Check, HardDrive, RefreshCw, Layers, Cpu, Network, Key
 } from 'lucide-react';
 import './App.css';
-
-// TMDb Public Free Read-Only Key (proxy bypass)
-const TMDB_API_KEY = "8414aa8e05cc1c062c3e5d0db2972986";
 
 interface MediaFile {
   name: string;
@@ -23,6 +20,11 @@ export default function App() {
   const [localLoading, setLocalLoading] = useState(true);
   const [currentLocalPlay, setCurrentLocalPlay] = useState<MediaFile | null>(null);
   
+  // TMDb API Key state (saved privately in client's localStorage)
+  const [tmdbKey, setTmdbKey] = useState<string>(() => localStorage.getItem('tmdb_api_key') || '');
+  const [keyInput, setKeyInput] = useState('');
+  const [showKeyModal, setShowKeyModal] = useState(false);
+
   // Cloud search & TMDB states
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -46,8 +48,10 @@ export default function App() {
   // Load trending media & local catalog
   useEffect(() => {
     fetchLocalLibrary();
-    fetchTrendingContent();
-  }, []);
+    if (tmdbKey) {
+      fetchTrendingContent();
+    }
+  }, [tmdbKey]);
 
   const fetchLocalLibrary = async () => {
     setLocalLoading(true);
@@ -66,16 +70,16 @@ export default function App() {
   };
 
   const fetchTrendingContent = async () => {
+    if (!tmdbKey) return;
     try {
-      const movieRes = await fetch(`https://api.themoviedb.org/3/trending/movie/week?api_key=${TMDB_API_KEY}`);
+      const movieRes = await fetch(`https://api.themoviedb.org/3/trending/movie/week?api_key=${tmdbKey}`);
       const movieData = await movieRes.json();
       if (movieData.results && movieData.results.length > 0) {
         setTrendingMovies(movieData.results);
-        // Set first item as Hero backdrop banner
         setHeroMovie(movieData.results[0]);
       }
 
-      const tvRes = await fetch(`https://api.themoviedb.org/3/trending/tv/week?api_key=${TMDB_API_KEY}`);
+      const tvRes = await fetch(`https://api.themoviedb.org/3/trending/tv/week?api_key=${tmdbKey}`);
       const tvData = await tvRes.json();
       if (tvData.results) {
         setTrendingTv(tvData.results);
@@ -86,10 +90,10 @@ export default function App() {
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+    if (!searchQuery.trim() || !tmdbKey) return;
     setSearchLoading(true);
     try {
-      const res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(searchQuery)}`);
+      const res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${tmdbKey}&query=${encodeURIComponent(searchQuery)}`);
       const data = await res.json();
       if (data.results) {
         setSearchResults(data.results.filter((x: any) => x.media_type === 'movie' || x.media_type === 'tv'));
@@ -100,9 +104,28 @@ export default function App() {
     setSearchLoading(false);
   };
 
+  const saveApiKey = () => {
+    const cleanKey = keyInput.trim();
+    if (cleanKey) {
+      localStorage.setItem('tmdb_api_key', cleanKey);
+      setTmdbKey(cleanKey);
+      setShowKeyModal(false);
+    }
+  };
+
+  const clearApiKey = () => {
+    localStorage.removeItem('tmdb_api_key');
+    setTmdbKey('');
+    setTrendingMovies([]);
+    setTrendingTv([]);
+    setHeroMovie(null);
+    setSearchResults([]);
+  };
+
   const loadTvEpisodes = async (tmdbId: number) => {
+    if (!tmdbKey) return;
     try {
-      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${TMDB_API_KEY}`);
+      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${tmdbKey}`);
       const data = await res.json();
       if (data.seasons) {
         const filteredSeasons = data.seasons.filter((s: any) => s.season_number > 0);
@@ -118,8 +141,9 @@ export default function App() {
   };
 
   const fetchEpisodes = async (tmdbId: number, seasonNum: number) => {
+    if (!tmdbKey) return;
     try {
-      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNum}?api_key=${TMDB_API_KEY}`);
+      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNum}?api_key=${tmdbKey}`);
       const data = await res.json();
       if (data.episodes) {
         setEpisodes(data.episodes);
@@ -132,7 +156,7 @@ export default function App() {
 
   const launchCloudStream = (item: any) => {
     setActiveModalItem(item);
-    if (item.media_type === 'tv' || (!item.media_type && item.name)) { // TV show detection
+    if (item.media_type === 'tv' || (!item.media_type && item.name)) {
       loadTvEpisodes(item.id);
     }
   };
@@ -149,7 +173,6 @@ export default function App() {
     setCurrentLocalPlay(item);
   };
 
-  // Fuzzy match to check if a TMDB catalog movie exists in our local files!
   const findLocalMatch = (title: string): MediaFile | null => {
     if (!title) return null;
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -181,6 +204,7 @@ export default function App() {
           <Play className="w-8 h-8 text-violet-500 fill-violet-500" />
           <span>TailStreamer</span>
         </div>
+        
         <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
           <button 
             onClick={() => setActiveTab('local')}
@@ -201,9 +225,21 @@ export default function App() {
             <Network className="w-4 h-4" /> Mesh Topology
           </button>
         </div>
-        <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
-          Tailscale VPN Live
+
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => {
+              setKeyInput(tmdbKey);
+              setShowKeyModal(true);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs border transition-all ${tmdbKey ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse'}`}
+          >
+            <Key className="w-4 h-4" /> {tmdbKey ? "TMDb Connected" : "Connect TMDb API"}
+          </button>
+          <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20">
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
+            Tailscale Live
+          </div>
         </div>
       </header>
 
@@ -314,7 +350,7 @@ export default function App() {
                       <div className="flex items-start gap-3 bg-blue-500/5 border border-blue-500/10 p-4 rounded-2xl max-w-lg">
                         <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-blue-300/80 leading-relaxed">
-                          <strong>Browser Compatibility Layer Active</strong>: FFmpeg is transcoding surround audio (AC3/DTS) to stereo AAC on-the-fly. The video stream is copied without compression.
+                          <strong>Browser Compatibility Layer Active</strong>: FFmpeg transcodes audio to dual-channel AAC on-the-fly. The video track is copied without compression.
                         </p>
                       </div>
                     )}
@@ -328,87 +364,108 @@ export default function App() {
         {/* TAB 2: CLOUD CINEMA (CINEBY FE PARITY) */}
         {activeTab === 'cloud' && (
           <div className="flex flex-col gap-10">
-            {/* Premium Hero Section */}
-            {heroMovie && (
-              <div 
-                className="relative h-[480px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-end p-12 bg-cover bg-center"
-                style={{ backgroundImage: `linear-gradient(to top, rgba(10,5,27,1) 15%, rgba(10,5,27,0.4) 60%, transparent), url(https://image.tmdb.org/t/p/original${heroMovie.backdrop_path})` }}
-              >
-                <div className="max-w-2xl">
-                  <span className="bg-violet-600/30 text-violet-300 border border-violet-500/20 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-4 inline-block">Trending Blockbuster</span>
-                  <h1 className="text-5xl font-black mb-3 tracking-tight">{heroMovie.title || heroMovie.name}</h1>
-                  <p className="text-slate-300 text-sm line-clamp-3 mb-6 leading-relaxed">{heroMovie.overview}</p>
-                  <div className="flex gap-4">
+            {/* Setup message if TMDb Key is missing */}
+            {!tmdbKey ? (
+              <div className="glass-panel p-12 rounded-3xl text-center max-w-2xl mx-auto flex flex-col items-center gap-6 border-amber-500/20">
+                <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-400 animate-pulse">
+                  <Key className="w-8 h-8" />
+                </div>
+                <h2 className="text-2xl font-black">TMDb API Connection Required</h2>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  To search all movies and TV shows worldwide (even if they are not in your local library), please connect your free TMDb API key. It will be stored securely and privately in your browser's local storage.
+                </p>
+                <button 
+                  onClick={() => setShowKeyModal(true)}
+                  className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold px-8 py-3 rounded-full shadow-lg shadow-violet-500/20 transition-all hover:scale-105"
+                >
+                  Configure TMDb API Key
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Premium Hero Section */}
+                {heroMovie && (
+                  <div 
+                    className="relative h-[480px] rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex items-end p-12 bg-cover bg-center"
+                    style={{ backgroundImage: `linear-gradient(to top, rgba(10,5,27,1) 15%, rgba(10,5,27,0.4) 60%, transparent), url(https://image.tmdb.org/t/p/original${heroMovie.backdrop_path})` }}
+                  >
+                    <div className="max-w-2xl">
+                      <span className="bg-violet-600/30 text-violet-300 border border-violet-500/20 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-4 inline-block">Trending Blockbuster</span>
+                      <h1 className="text-5xl font-black mb-3 tracking-tight">{heroMovie.title || heroMovie.name}</h1>
+                      <p className="text-slate-300 text-sm line-clamp-3 mb-6 leading-relaxed">{heroMovie.overview}</p>
+                      <div className="flex gap-4">
+                        <button 
+                          onClick={() => launchCloudStream(heroMovie)}
+                          className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold px-8 py-3 rounded-full flex items-center gap-2 shadow-lg shadow-violet-500/25 transition-all hover:scale-105"
+                        >
+                          <Play className="w-5 h-5 fill-white" /> Watch Now
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Advanced Search bar */}
+                <div className="max-w-2xl mx-auto w-full flex flex-col gap-6">
+                  <h2 className="text-3xl font-extrabold text-center tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Search Movies & TV Shows</h2>
+                  <div className="flex bg-white/5 border border-white/10 rounded-full p-2 items-center focus-within:border-violet-500 focus-within:shadow-[0_0_20px_rgba(139,92,246,0.15)] transition-all">
+                    <Search className="w-6 h-6 text-slate-400 ml-4" />
+                    <input 
+                      type="text" 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                      placeholder="Enter movie or show name (e.g. Stargate)..."
+                      className="flex-1 bg-transparent border-none text-white outline-none px-4 py-3 font-semibold"
+                    />
                     <button 
-                      onClick={() => launchCloudStream(heroMovie)}
-                      className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold px-8 py-3 rounded-full flex items-center gap-2 shadow-lg shadow-violet-500/25 transition-all hover:scale-105"
+                      onClick={handleSearch}
+                      className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold px-8 py-3 rounded-full transition-all shadow-md shadow-violet-500/20"
                     >
-                      <Play className="w-5 h-5 fill-white" /> Watch Now
+                      Search
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* Advanced Search bar */}
-            <div className="max-w-2xl mx-auto w-full flex flex-col gap-6">
-              <h2 className="text-3xl font-extrabold text-center tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Search Millions of Movies & TV Shows</h2>
-              <div className="flex bg-white/5 border border-white/10 rounded-full p-2 items-center focus-within:border-violet-500 focus-within:shadow-[0_0_20px_rgba(139,92,246,0.15)] transition-all">
-                <Search className="w-6 h-6 text-slate-400 ml-4" />
-                <input 
-                  type="text" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                  placeholder="Enter movie or show name (e.g. Stargate)..."
-                  className="flex-1 bg-transparent border-none text-white outline-none px-4 py-3 font-semibold"
-                />
-                <button 
-                  onClick={handleSearch}
-                  className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold px-8 py-3 rounded-full transition-all shadow-md shadow-violet-500/20"
-                >
-                  Search
-                </button>
-              </div>
-            </div>
+                {/* Results Shelf */}
+                {searchResults.length > 0 && (
+                  <div>
+                    <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2">Search Results</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                      {searchResults.map((item, idx) => (
+                        <MediaCard key={idx} item={item} onSelect={launchCloudStream} localCheck={findLocalMatch} />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {/* Results Shelf */}
-            {searchResults.length > 0 && (
-              <div>
-                <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2">Search Results</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                  {searchResults.map((item, idx) => (
-                    <MediaCard key={idx} item={item} onSelect={launchCloudStream} localCheck={findLocalMatch} />
-                  ))}
+                {/* Trending Shelf (Movies) */}
+                <div>
+                  <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2">
+                    <Film className="w-6 h-6 text-violet-400" />
+                    Trending Movies
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                    {trendingMovies.map((item, idx) => (
+                      <MediaCard key={idx} item={item} onSelect={launchCloudStream} localCheck={findLocalMatch} />
+                    ))}
+                  </div>
                 </div>
-              </div>
+
+                {/* Trending Shelf (TV Shows) */}
+                <div>
+                  <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2">
+                    <Tv className="w-6 h-6 text-fuchsia-400" />
+                    Popular TV Shows
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                    {trendingTv.map((item, idx) => (
+                      <MediaCard key={idx} item={item} onSelect={launchCloudStream} localCheck={findLocalMatch} />
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
-
-            {/* Trending Shelf (Movies) */}
-            <div>
-              <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2">
-                <Film className="w-6 h-6 text-violet-400" />
-                Trending Movies
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                {trendingMovies.map((item, idx) => (
-                  <MediaCard key={idx} item={item} onSelect={launchCloudStream} localCheck={findLocalMatch} />
-                ))}
-              </div>
-            </div>
-
-            {/* Trending Shelf (TV Shows) */}
-            <div>
-              <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2">
-                <Tv className="w-6 h-6 text-fuchsia-400" />
-                Popular TV Shows
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                {trendingTv.map((item, idx) => (
-                  <MediaCard key={idx} item={item} onSelect={launchCloudStream} localCheck={findLocalMatch} />
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
@@ -419,9 +476,9 @@ export default function App() {
             animate={{ opacity: 1 }}
             className="glass-panel p-10 rounded-3xl flex flex-col items-center justify-center min-h-[500px]"
           >
-            <h2 className="font-extrabold text-3xl mb-3 bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">SSH mesh Mesh & Streaming Architecture</h2>
+            <h2 className="font-extrabold text-3xl mb-3 bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">SSH mesh & Streaming Architecture</h2>
             <p className="text-slate-400 text-sm mb-12 text-center max-w-xl">
-              An interactive visual topology mapping the end-to-end flow of lossless streaming media over your secure Tailscale mesh VPN network.
+              An interactive visual topology mapping the flow of lossless streaming media over your secure Tailscale mesh VPN network.
             </p>
 
             <div className="flex flex-col md:flex-row items-center justify-between gap-12 max-w-5xl w-full">
@@ -447,7 +504,7 @@ export default function App() {
               >
                 <Cpu className="w-12 h-12 text-fuchsia-400 mb-3" />
                 <h4 className="font-bold text-lg text-slate-100">s001 NixOS Daemon</h4>
-                <span className="text-xs text-slate-500 mt-1">NATS / FastAPI / FFmpeg</span>
+                <span className="text-xs text-slate-500 mt-1">FastAPI / FFmpeg</span>
                 <p className="text-xs text-slate-400/70 mt-3 leading-relaxed">Runs isolated background services. Spawns FFmpeg for on-the-fly AC3/DTS audio translation.</p>
               </motion.div>
 
@@ -469,6 +526,69 @@ export default function App() {
           </motion.div>
         )}
       </main>
+
+      {/* TMDb Config Key Modal */}
+      <AnimatePresence>
+        {showKeyModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-[1000] flex justify-center items-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="glass-panel max-w-lg w-full p-8 rounded-3xl flex flex-col gap-6 relative"
+            >
+              <button 
+                onClick={() => setShowKeyModal(false)}
+                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <div className="flex items-center gap-3">
+                <Key className="w-6 h-6 text-violet-500" />
+                <h3 className="font-extrabold text-2xl">Configure TMDb API</h3>
+              </div>
+
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Connect your personal, free API key from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" className="text-violet-400 underline font-semibold">The Movie Database (TMDb)</a> to unlock global media search, dynamic backdrops, and trending categories.
+              </p>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-slate-500 font-bold uppercase tracking-wider">TMDb API Key (v3)</label>
+                <input 
+                  type="password"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value)}
+                  placeholder="Paste your 32-character TMDb API key here..."
+                  className="bg-slate-900 border border-white/10 text-white px-4 py-3 rounded-xl font-medium outline-none focus:border-violet-500 transition-all text-sm"
+                />
+              </div>
+
+              <div className="flex gap-4 justify-end mt-4">
+                {tmdbKey && (
+                  <button 
+                    onClick={clearApiKey}
+                    className="px-6 py-3 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-bold text-xs transition"
+                  >
+                    Disconnect Key
+                  </button>
+                )}
+                <button 
+                  onClick={saveApiKey}
+                  className="px-8 py-3 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold text-xs transition shadow-lg shadow-violet-500/20"
+                >
+                  Save API Key
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* CLOUD STREAM DETAIL MODAL (CINEBY FE FEATURE PARITY) */}
       <AnimatePresence>
@@ -590,7 +710,6 @@ export default function App() {
   );
 }
 
-// Media Card Component (TMDb grid element)
 function MediaCard({ item, onSelect, localCheck }: { item: any, onSelect: (x: any) => void, localCheck: (x: string) => MediaFile | null }) {
   const title = item.title || item.name;
   const year = (item.release_date || item.first_air_date || '').substring(0, 4);
@@ -626,7 +745,6 @@ function MediaCard({ item, onSelect, localCheck }: { item: any, onSelect: (x: an
   );
 }
 
-// Sidebar Directory Tree File Node Component
 function TreeItemNode({ item, onSelect, selectedItem }: { item: MediaFile, onSelect: (x: MediaFile) => void, selectedItem: MediaFile | null }) {
   const [isOpen, setIsOpen] = useState(false);
   const isSelected = selectedItem && selectedItem.path === item.path;
