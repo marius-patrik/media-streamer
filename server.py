@@ -3,6 +3,7 @@ import subprocess
 import urllib.parse
 from fastapi import FastAPI, HTTPException, Header, Query
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -17,6 +18,11 @@ app.add_middleware(
 )
 
 MEDIA_DIR = "/mnt/HDD1/media"
+DIST_DIR = "/home/patrik/media-streamer/dist"
+
+# Mount compiled static assets (js/css/etc)
+if os.path.exists(os.path.join(DIST_DIR, "static")):
+    app.mount("/static", StaticFiles(directory=os.path.join(DIST_DIR, "static")), name="static")
 
 @app.get("/api/media")
 def list_media():
@@ -63,14 +69,15 @@ def stream_file(filepath: str, transcode: bool = Query(True)):
         raise HTTPException(status_code=404, detail="File not found")
     
     if transcode:
-        # Copies the video track (0% overhead) and transcodes audio to AAC (plays perfectly in browsers)
+        # Transcode audio to browser-supported AAC, copy video track untouched
         cmd = [
             "ffmpeg",
             "-i", safe_path,
             "-vcodec", "copy",
             "-acodec", "aac",
             "-ab", "192k",
-            "-sn",  # ignore subtitle tracks to prevent parsing errors
+            "-ac", "2",  # force 2-channel stereo for absolute browser compatibility
+            "-sn",
             "-f", "mp4",
             "-movflags", "frag_keyframe+empty_moov",
             "pipe:1"
@@ -95,16 +102,23 @@ def stream_file(filepath: str, transcode: bool = Query(True)):
                 
         return StreamingResponse(iterfile(), media_type="video/mp4")
     
-    # Direct range response stream for compatible files
     return FileResponse(safe_path)
 
-@app.get("/")
-def get_index():
-    index_path = "/home/patrik/media-streamer/index.html"
+@app.get("/favicon.png")
+def get_favicon():
+    favicon_path = os.path.join(DIST_DIR, "favicon.png")
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    raise HTTPException(status_code=404, detail="Not found")
+
+@app.get("/{rest:path}")
+def get_index(rest: str = ""):
+    # Serve index.html for all other routes to support single page app routing if needed
+    index_path = os.path.join(DIST_DIR, "index.html")
     if os.path.exists(index_path):
         with open(index_path, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
-    return HTMLResponse(content="<h1>Frontend index.html not found!</h1>")
+    return HTMLResponse(content="<h1>TailStreamer compiled dist/index.html not found on server!</h1>")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8080)
