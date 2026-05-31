@@ -2,9 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Play, Folder, Server, Volume2, Cloud, Search, Info, X, 
-  Tv, Film, Copy, Check, HardDrive, RefreshCw, Layers, Cpu, Network, Key, Star, Sparkles, ChevronLeft, ChevronRight, Share2, HelpCircle
+  Tv, Film, Copy, Check, HardDrive, RefreshCw, Star, Sparkles, Key, ListMusic
 } from 'lucide-react';
 import './App.css';
+
+// TMDb Free Read-Only Key
+const TMDB_API_KEY = "8414aa8e05cc1c062c3e5d0db2972986";
 
 interface MediaFile {
   name: string;
@@ -14,18 +17,26 @@ interface MediaFile {
   children?: MediaFile[];
 }
 
+// TMDb Mapping for Local Folders to display professional posters & metadata
+const LOCAL_METADATA_MAP: Record<string, { id: number, type: 'movie' | 'tv', title: string }> = {
+  "andromeda": { id: 1107, type: 'tv', title: "Gene Roddenberry's Andromeda" },
+  "blakes7": { id: 4544, type: 'tv', title: "Blake's 7" },
+  "macgyver": { id: 2407, type: 'tv', title: "MacGyver" },
+  "stargate": { id: 307, type: 'tv', title: "Stargate Atlantis" },
+  "the.fifth.element.1997.mkv": { id: 18, type: 'movie', title: "The Fifth Element" }
+};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'local' | 'cloud' | 'topology'>('cloud'); // Default to Cloud Cinema (cineby grade home)
   const [localMedia, setLocalMedia] = useState<MediaFile[]>([]);
   const [localLoading, setLocalLoading] = useState(true);
-  const [currentLocalPlay, setCurrentLocalPlay] = useState<MediaFile | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'local' | 'cloud' | 'movies' | 'tv'>('all');
   
-  // TMDb API Key state (saved privately in client's localStorage)
+  // TMDb API Key state
   const [tmdbKey, setTmdbKey] = useState<string>(() => localStorage.getItem('tmdb_api_key') || '');
   const [keyInput, setKeyInput] = useState('');
   const [showKeyModal, setShowKeyModal] = useState(false);
 
-  // Cloud search & TMDB states
+  // Cloud & TMDB catalog states
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -33,22 +44,27 @@ export default function App() {
   const [trendingTv, setTrendingTv] = useState<any[]>([]);
   const [heroMovie, setHeroMovie] = useState<any>(null);
   
-  // Active detailed stream modal states
+  // Detailed Modal/Theater Player states
   const [activeModalItem, setActiveModalItem] = useState<any>(null);
   const [activeProvider, setActiveProvider] = useState<'su' | 'to'>('su');
   const [seasons, setSeasons] = useState<any[]>([]);
   const [episodes, setEpisodes] = useState<any[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<number>(1);
   const [selectedEpisode, setSelectedEpisode] = useState<number>(1);
-  
-  // Transcode state
+
+  // Stream parameters
   const [shouldTranscode, setShouldTranscode] = useState(true);
+  const [currentLocalPlayPath, setCurrentLocalPlayPath] = useState<string | null>(null);
+  const [currentLocalPlayName, setCurrentLocalPlayName] = useState<string>('');
   const [copiedUrl, setCopiedUrl] = useState(false);
-  
-  // Immersive details drawer state
+
+  // Immersive Details Drawer state
   const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [credits, setCredits] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  // Rich metadata for local cards
+  const [richLocalCards, setRichLocalCards] = useState<any[]>([]);
 
   useEffect(() => {
     fetchLocalLibrary();
@@ -57,6 +73,13 @@ export default function App() {
     }
   }, [tmdbKey]);
 
+  // Once local folders and TMDb key are loaded, build rich catalog cards for local items!
+  useEffect(() => {
+    if (localMedia.length > 0 && tmdbKey) {
+      buildRichLocalCards();
+    }
+  }, [localMedia, tmdbKey]);
+
   const fetchLocalLibrary = async () => {
     setLocalLoading(true);
     try {
@@ -64,11 +87,9 @@ export default function App() {
       const data = await res.json();
       if (Array.isArray(data)) {
         setLocalMedia(data);
-      } else {
-        setLocalMedia([]);
       }
     } catch (e) {
-      console.error("Error fetching local media", e);
+      console.error(e);
     }
     setLocalLoading(false);
   };
@@ -89,8 +110,31 @@ export default function App() {
         setTrendingTv(tvData.results);
       }
     } catch (e) {
-      console.error("Error fetching trending TMDB catalog", e);
+      console.error(e);
     }
+  };
+
+  const buildRichLocalCards = async () => {
+    const cards: any[] = [];
+    for (const item of localMedia) {
+      const key = item.name.toLowerCase();
+      const mapped = LOCAL_METADATA_MAP[key];
+      if (mapped) {
+        try {
+          const res = await fetch(`https://api.themoviedb.org/3/${mapped.type}/${mapped.id}?api_key=${tmdbKey}`);
+          const data = await res.json();
+          cards.push({
+            ...data,
+            media_type: mapped.type,
+            is_local: true,
+            local_item_ref: item
+          });
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    setRichLocalCards(cards);
   };
 
   const handleSearch = async () => {
@@ -103,7 +147,7 @@ export default function App() {
         setSearchResults(data.results.filter((x: any) => x.media_type === 'movie' || x.media_type === 'tv'));
       }
     } catch (e) {
-      console.error("Error searching TMDb", e);
+      console.error(e);
     }
     setSearchLoading(false);
   };
@@ -118,9 +162,63 @@ export default function App() {
       const creditsData = await creditsRes.json();
       setCredits(creditsData);
     } catch (e) {
-      console.error("Error loading credits", e);
+      console.error(e);
     }
     setDetailLoading(false);
+  };
+
+  const loadTvEpisodes = async (tmdbId: number) => {
+    if (!tmdbKey) return;
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${tmdbKey}`);
+      const data = await res.json();
+      if (data.seasons) {
+        const filteredSeasons = data.seasons.filter((s: any) => s.season_number > 0);
+        setSeasons(filteredSeasons);
+        if (filteredSeasons.length > 0) {
+          setSelectedSeason(filteredSeasons[0].season_number);
+          fetchEpisodes(tmdbId, filteredSeasons[0].season_number);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchEpisodes = async (tmdbId: number, seasonNum: number) => {
+    if (!tmdbKey) return;
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNum}?api_key=${tmdbKey}`);
+      const data = await res.json();
+      if (data.episodes) {
+        setEpisodes(data.episodes);
+        setSelectedEpisode(data.episodes[0].episode_number);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const launchCloudPlayer = (item: any) => {
+    setActiveModalItem(item);
+    setCurrentLocalPlayPath(null);
+    if (item.media_type === 'tv' || (!item.media_type && item.name)) {
+      loadTvEpisodes(item.id);
+    }
+  };
+
+  const launchLocalPlayer = (path: string, name: string) => {
+    setCurrentLocalPlayPath(path);
+    setCurrentLocalPlayName(name);
+    setActiveModalItem(selectedDetailItem || { title: name, media_type: 'movie' });
+  };
+
+  const copyVlcLink = () => {
+    if (!currentLocalPlayPath) return;
+    const fullUrl = `${window.location.protocol}//${window.location.host}/stream/${encodeURIComponent(currentLocalPlayPath)}?transcode=false`;
+    navigator.clipboard.writeText(fullUrl);
+    setCopiedUrl(true);
+    setTimeout(() => setCopiedUrl(false), 2000);
   };
 
   const saveApiKey = () => {
@@ -139,109 +237,70 @@ export default function App() {
     setTrendingTv([]);
     setHeroMovie(null);
     setSearchResults([]);
+    setRichLocalCards([]);
   };
 
-  const loadTvEpisodes = async (tmdbId: number) => {
-    if (!tmdbKey) return;
-    try {
-      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${tmdbKey}`);
-      const data = await res.json();
-      if (data.seasons) {
-        const filteredSeasons = data.seasons.filter((s: any) => s.season_number > 0);
-        setSeasons(filteredSeasons);
-        if (filteredSeasons.length > 0) {
-          setSelectedSeason(filteredSeasons[0].season_number);
-          fetchEpisodes(tmdbId, filteredSeasons[0].season_number);
-        }
-      }
-    } catch (e) {
-      console.error("Error loading seasons", e);
-    }
-  };
-
-  const fetchEpisodes = async (tmdbId: number, seasonNum: number) => {
-    if (!tmdbKey) return;
-    try {
-      const res = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNum}?api_key=${tmdbKey}`);
-      const data = await res.json();
-      if (data.episodes) {
-        setEpisodes(data.episodes);
-        setSelectedEpisode(data.episodes[0].episode_number);
-      }
-    } catch (e) {
-      console.error("Error loading episodes", e);
-    }
-  };
-
-  const launchCloudStream = (item: any) => {
-    setActiveModalItem(item);
-    if (item.media_type === 'tv' || (!item.media_type && item.name)) {
-      loadTvEpisodes(item.id);
-    }
-  };
-
-  const copyVlcLink = () => {
-    if (!currentLocalPlay) return;
-    const fullUrl = `${window.location.protocol}//${window.location.host}/stream/${encodeURIComponent(currentLocalPlay.path)}?transcode=false`;
-    navigator.clipboard.writeText(fullUrl);
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2000);
-  };
-
-  const triggerLocalPlay = (item: MediaFile) => {
-    setCurrentLocalPlay(item);
-  };
-
-  const findLocalMatch = (title: string): MediaFile | null => {
+  const findLocalMatch = (title: string): any | null => {
     if (!title) return null;
     const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
     const cleanTitle = normalize(title);
-    
-    let match: MediaFile | null = null;
-    const recurse = (files: MediaFile[]) => {
-      for (const f of files) {
-        if (f.type === 'file') {
-          const nameClean = normalize(f.name);
-          if (nameClean.includes(cleanTitle) || cleanTitle.includes(nameClean)) {
-            match = f;
-            return;
-          }
-        } else if (f.children) {
-          recurse(f.children);
-        }
+    return richLocalCards.find(c => normalize(c.title || c.name).includes(cleanTitle)) || null;
+  };
+
+  // Recursively extract all video files inside a directory to display as list/playlist!
+  const getFilesList = (item: MediaFile): MediaFile[] => {
+    const files: MediaFile[] = [];
+    const recurse = (node: MediaFile) => {
+      if (node.type === 'file') {
+        files.push(node);
+      } else if (node.children) {
+        node.children.forEach(recurse);
       }
     };
-    recurse(localMedia);
-    return match;
+    recurse(item);
+    return files;
   };
 
   return (
     <div className="min-h-screen text-slate-100 pb-24 select-none relative backdrop-blur-overlay">
-      {/* Dynamic Header */}
+      {/* Premium Sticky Header */}
       <header className="flex justify-between items-center px-10 py-5 border-b border-white/5 bg-slate-950/70 backdrop-blur-2xl sticky top-0 z-50 transition-all duration-300">
         <div className="flex items-center gap-3 font-extrabold text-2xl tracking-tight bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-500 bg-clip-text text-transparent cursor-pointer">
           <Play className="w-8 h-8 text-violet-500 fill-violet-500 drop-shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
           <span>TailStreamer</span>
         </div>
-        
-        <div className="flex bg-white/5 p-1 rounded-full border border-white/10 shadow-inner">
+
+        {/* Global Filter Pills */}
+        <div className="flex bg-white/5 p-1.5 rounded-full border border-white/10 shadow-lg">
           <button 
-            onClick={() => setActiveTab('local')}
-            className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-sm transition-all duration-300 ${activeTab === 'local' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/35' : 'text-slate-400 hover:text-white'}`}
+            onClick={() => setActiveFilter('all')}
+            className={`px-5 py-2 rounded-full font-bold text-xs transition-all duration-300 ${activeFilter === 'all' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
           >
-            <Server className="w-4 h-4" /> Local HDD
+            ✨ All Media
           </button>
           <button 
-            onClick={() => setActiveTab('cloud')}
-            className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-sm transition-all duration-300 ${activeTab === 'cloud' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/35' : 'text-slate-400 hover:text-white'}`}
+            onClick={() => setActiveFilter('local')}
+            className={`px-5 py-2 rounded-full font-bold text-xs transition-all duration-300 ${activeFilter === 'local' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
           >
-            <Cloud className="w-4 h-4" /> Cloud Cinema
+            📂 Available Lossless
           </button>
           <button 
-            onClick={() => setActiveTab('topology')}
-            className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-sm transition-all duration-300 ${activeTab === 'topology' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/35' : 'text-slate-400 hover:text-white'}`}
+            onClick={() => setActiveFilter('cloud')}
+            className={`px-5 py-2 rounded-full font-bold text-xs transition-all duration-300 ${activeFilter === 'cloud' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
           >
-            <Network className="w-4 h-4" /> Mesh Topology
+            ☁️ Cloud Only
+          </button>
+          <button 
+            onClick={() => setActiveFilter('movies')}
+            className={`px-5 py-2 rounded-full font-bold text-xs transition-all duration-300 ${activeFilter === 'movies' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+          >
+            🎬 Movies
+          </button>
+          <button 
+            onClick={() => setActiveFilter('tv')}
+            className={`px-5 py-2 rounded-full font-bold text-xs transition-all duration-300 ${activeFilter === 'tv' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+          >
+            📺 TV Shows
           </button>
         </div>
 
@@ -253,309 +312,153 @@ export default function App() {
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-xs border transition-all hover:scale-105 duration-200 ${tmdbKey ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse'}`}
           >
-            <Key className="w-4 h-4" /> {tmdbKey ? "TMDb Live" : "Connect TMDb API"}
+            <Key className="w-4 h-4" /> {tmdbKey ? "TMDb Connected" : "Connect TMDb"}
           </button>
-          <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-4 py-2 rounded-full border border-emerald-500/20">
-            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-            Tailscale VPN
-          </div>
         </div>
       </header>
 
       {/* Main Container */}
       <main className="max-w-[1440px] mx-auto px-10 mt-8">
         
-        {/* TAB 1: LOCAL MEDIA CENTER */}
-        {activeTab === 'local' && (
-          <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-10">
-            {/* Folder Tree Sidebar */}
-            <div className="glass-panel p-6 rounded-3xl flex flex-col h-[78vh] shadow-2xl">
-              <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
-                <h3 className="font-extrabold text-xl flex items-center gap-2">
-                  <Folder className="w-5 h-5 text-amber-500 fill-amber-500" />
-                  Local Libraries
-                </h3>
-                <button 
-                  onClick={fetchLocalLibrary}
-                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto pr-2">
-                {localLoading ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                    <RefreshCw className="w-8 h-8 animate-spin text-violet-500 mb-3" />
-                    <span>Mapping directories...</span>
-                  </div>
-                ) : localMedia.length === 0 ? (
-                  <div className="text-center py-20 text-slate-400">Library folders empty or path not found.</div>
-                ) : (
-                  <ul className="space-y-1">
-                    {localMedia.map((item, idx) => (
-                      <TreeItemNode 
-                        key={idx} 
-                        item={item} 
-                        onSelect={triggerLocalPlay} 
-                        selectedItem={currentLocalPlay} 
-                      />
-                    ))}
-                  </ul>
-                )}
-              </div>
+        {/* TMDb Connection Needed */}
+        {!tmdbKey ? (
+          <div className="glass-panel p-16 rounded-3xl text-center max-w-2xl mx-auto flex flex-col items-center gap-6 border-amber-500/20 shadow-2xl mt-12">
+            <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-400 animate-pulse">
+              <Key className="w-8 h-8" />
             </div>
-
-            {/* Custom Video Player Panel */}
-            <div className="glass-panel p-6 rounded-3xl flex flex-col min-h-[500px] shadow-2xl">
-              <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
-                {currentLocalPlay ? (
-                  <video 
-                    key={currentLocalPlay.path}
-                    controls 
-                    autoPlay 
-                    className="w-full h-full object-contain"
-                  >
-                    <source 
-                      src={`/stream/${encodeURIComponent(currentLocalPlay.path)}?transcode=${shouldTranscode}`} 
-                      type="video/mp4" 
-                    />
-                    Your browser does not support native streaming.
-                  </video>
-                ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-tr from-slate-950 via-slate-900 to-violet-950/40 text-slate-400 gap-4">
-                    <Play className="w-16 h-16 text-violet-500/30 animate-pulse-slow" />
-                    <h3 className="font-bold text-lg text-slate-200">Lossless HDD Streaming</h3>
-                    <p className="text-sm text-slate-500">Select any video file from the Local Library to start.</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Player Metadata and Audio Transcoding controls */}
-              <div className="mt-6 flex-1 flex flex-col justify-between">
-                <div>
-                  <h2 className="font-extrabold text-2xl text-slate-100">
-                    {currentLocalPlay ? currentLocalPlay.name : "No Media Selected"}
-                  </h2>
-                  <div className="flex flex-wrap gap-4 mt-3 text-sm text-slate-400 items-center">
-                    <span className="flex items-center gap-1.5"><HardDrive className="w-4 h-4 text-violet-400" /> {currentLocalPlay && currentLocalPlay.size ? `${(currentLocalPlay.size / (1024 * 1024)).toFixed(1)} MB` : "-- MB"}</span>
-                    <span className="flex items-center gap-1.5"><Folder className="w-4 h-4 text-amber-400" /> {currentLocalPlay ? currentLocalPlay.path : "--"}</span>
-                  </div>
-                </div>
-
-                {currentLocalPlay && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-6 border-t border-white/10 pt-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6"
-                  >
-                    <div className="flex items-center gap-3">
-                      <button 
-                        onClick={() => setShouldTranscode(!shouldTranscode)}
-                        className={`px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 border transition-all ${shouldTranscode ? 'bg-violet-600/20 text-violet-300 border-violet-500/30 shadow-[0_0_15px_rgba(139,92,246,0.1)]' : 'bg-white/5 text-slate-400 border-white/10'}`}
-                      >
-                        <Volume2 className="w-4 h-4" /> Audio Transcoder: {shouldTranscode ? "ON (Recommended)" : "OFF"}
-                      </button>
-                      <button 
-                        onClick={copyVlcLink}
-                        className="px-5 py-2.5 rounded-full bg-white/5 border border-white/10 font-bold text-sm hover:bg-white/10 transition-all flex items-center gap-2 text-slate-200"
-                      >
-                        {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                        Copy VLC Stream Link
-                      </button>
-                    </div>
-
-                    {shouldTranscode && (
-                      <div className="flex items-start gap-3 bg-blue-500/5 border border-blue-500/10 p-4 rounded-2xl max-w-lg">
-                        <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-blue-300/80 leading-relaxed">
-                          <strong>Browser Compatibility Active</strong>: Automatically downmixing AC3/DTS audio to stereo AAC on-the-fly. Zero video recompression.
-                        </p>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </div>
-            </div>
+            <h2 className="text-2xl font-black">TMDb Connection Required</h2>
+            <p className="text-slate-400 text-sm leading-relaxed font-medium">
+              Link your free TMDb API key to fetch high-definition media catalog details, trending carousels, and poster art.
+            </p>
+            <button 
+              onClick={() => setShowKeyModal(true)}
+              className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold px-8 py-3 rounded-full shadow-lg shadow-violet-500/25 transition-all hover:scale-105"
+            >
+              Configure TMDb Key
+            </button>
           </div>
-        )}
-
-        {/* TAB 2: CLOUD CINEMA (CINEBY FE PARITY) */}
-        {activeTab === 'cloud' && (
+        ) : (
           <div className="flex flex-col gap-14">
             
-            {/* Setup message if TMDb Key is missing */}
-            {!tmdbKey ? (
-              <div className="glass-panel p-16 rounded-3xl text-center max-w-2xl mx-auto flex flex-col items-center gap-6 border-amber-500/20 shadow-2xl">
-                <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-400 animate-pulse">
-                  <Key className="w-8 h-8" />
-                </div>
-                <h2 className="text-2xl font-black">TMDb Connection Required</h2>
-                <p className="text-slate-400 text-sm leading-relaxed">
-                  To experience a complete Cineby-grade library (trending lists, carousel navigation, and detailed info panels), please link your free TMDb API key. Everything stays client-side.
-                </p>
-                <button 
-                  onClick={() => setShowKeyModal(true)}
-                  className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold px-8 py-3 rounded-full shadow-lg shadow-violet-500/25 transition-all hover:scale-105"
-                >
-                  Configure TMDb API Key
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* Premium IMAX Hero Section */}
-                {heroMovie && (
-                  <div 
-                    className="relative h-[550px] rounded-3xl overflow-hidden border border-white/5 shadow-2xl flex items-end p-16 bg-cover bg-center transition-all duration-500"
-                    style={{ backgroundImage: `linear-gradient(to top, rgba(5,2,12,1) 10%, rgba(5,2,12,0.3) 60%, transparent), url(https://image.tmdb.org/t/p/original${heroMovie.backdrop_path})` }}
-                  >
-                    <div className="max-w-2xl relative z-10">
-                      <div className="flex gap-2.5 items-center mb-4">
-                        <span className="bg-violet-600/30 text-violet-300 border border-violet-500/20 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Featured blockbuster</span>
-                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/20 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Star className="w-3.5 h-3.5 fill-amber-300" /> {heroMovie.vote_average.toFixed(1)}</span>
-                      </div>
-                      <h1 className="text-6xl font-black mb-4 tracking-tight leading-none hero-text-glow">{heroMovie.title || heroMovie.name}</h1>
-                      <p className="text-slate-300 text-sm line-clamp-3 mb-8 leading-relaxed font-medium">{heroMovie.overview}</p>
-                      <div className="flex gap-4">
-                        <button 
-                          onClick={() => launchCloudStream(heroMovie)}
-                          className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black px-10 py-4 rounded-full flex items-center gap-2.5 shadow-xl shadow-violet-500/30 transition-all hover:scale-105"
-                        >
-                          <Play className="w-5 h-5 fill-white" /> Watch Now
-                        </button>
-                        <button 
-                          onClick={() => loadMediaDetails(heroMovie)}
-                          className="bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold px-8 py-4 rounded-full transition-all flex items-center gap-2"
-                        >
-                          <Info className="w-5 h-5" /> More Details
-                        </button>
-                      </div>
-                    </div>
+            {/* Immersive Widescreen IMAX Hero Banner */}
+            {heroMovie && activeFilter === 'all' && (
+              <div 
+                className="relative h-[550px] rounded-3xl overflow-hidden border border-white/5 shadow-2xl flex items-end p-16 bg-cover bg-center transition-all duration-500"
+                style={{ backgroundImage: `linear-gradient(to top, rgba(3,1,8,1) 10%, rgba(3,1,8,0.3) 60%, transparent), url(https://image.tmdb.org/t/p/original${heroMovie.backdrop_path})` }}
+              >
+                <div className="max-w-2xl relative z-10">
+                  <div className="flex gap-2.5 items-center mb-4">
+                    <span className="bg-violet-600/30 text-violet-300 border border-violet-500/20 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Featured blockbuster</span>
+                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/20 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Star className="w-3.5 h-3.5 fill-amber-300" /> {heroMovie.vote_average.toFixed(1)}</span>
                   </div>
-                )}
-
-                {/* Advanced Search bar */}
-                <div className="max-w-2xl mx-auto w-full flex flex-col gap-6">
-                  <div className="flex bg-white/5 border border-white/10 rounded-full p-2 items-center focus-within:border-violet-500 focus-within:shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-all">
-                    <Search className="w-6 h-6 text-slate-400 ml-4" />
-                    <input 
-                      type="text" 
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                      placeholder="Search movies, TV shows, and series..."
-                      className="flex-1 bg-transparent border-none text-white outline-none px-4 py-3 font-semibold text-lg"
-                    />
+                  <h1 className="text-6xl font-black mb-4 tracking-tight leading-none hero-text-glow">{heroMovie.title || heroMovie.name}</h1>
+                  <p className="text-slate-300 text-sm line-clamp-3 mb-8 leading-relaxed font-medium">{heroMovie.overview}</p>
+                  <div className="flex gap-4">
                     <button 
-                      onClick={handleSearch}
-                      className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black px-8 py-3 rounded-full transition-all shadow-md shadow-violet-500/20"
+                      onClick={() => launchCloudPlayer(heroMovie)}
+                      className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black px-10 py-4 rounded-full flex items-center gap-2.5 shadow-xl shadow-violet-500/30 transition-all hover:scale-105"
                     >
-                      Search
+                      <Play className="w-5 h-5 fill-white" /> Watch Now
+                    </button>
+                    <button 
+                      onClick={() => loadMediaDetails(heroMovie)}
+                      className="bg-white/5 border border-white/10 hover:bg-white/10 text-white font-extrabold px-8 py-4 rounded-full transition-all flex items-center gap-2"
+                    >
+                      <Info className="w-5 h-5" /> More Details
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Search Results */}
-                {searchResults.length > 0 && (
-                  <div>
-                    <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2 tracking-tight">Search Results</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                      {searchResults.map((item, idx) => (
-                        <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
-                      ))}
-                    </div>
-                  </div>
-                )}
+            {/* Advanced Search bar */}
+            <div className="max-w-2xl mx-auto w-full flex flex-col gap-6">
+              <div className="flex bg-white/5 border border-white/10 rounded-full p-2 items-center focus-within:border-violet-500 focus-within:shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-all">
+                <Search className="w-6 h-6 text-slate-400 ml-4" />
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder="Search movies, TV shows, and series..."
+                  className="flex-1 bg-transparent border-none text-white outline-none px-4 py-3 font-semibold text-lg"
+                />
+                <button 
+                  onClick={handleSearch}
+                  className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black px-8 py-3 rounded-full transition-all shadow-md shadow-violet-500/20"
+                >
+                  Search
+                </button>
+              </div>
+            </div>
 
-                {/* Categories shelves (Cineby styling) */}
-                <div className="flex flex-col gap-12">
-                  {/* Trending Movies Shelf */}
-                  <div>
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="font-black text-2xl flex items-center gap-2.5 tracking-tight">
-                        <Film className="w-6 h-6 text-violet-400" />
-                        Trending Movies
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                      {trendingMovies.slice(0, 12).map((item, idx) => (
-                        <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
-                      ))}
-                    </div>
-                  </div>
+            {/* Search Results */}
+            {searchResults.length > 0 && (
+              <div>
+                <h3 className="font-extrabold text-2xl mb-6 flex items-center gap-2 tracking-tight">Search Results</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                  {searchResults.map((item, idx) => (
+                    <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
+                  ))}
+                </div>
+              </div>
+            )}
 
-                  {/* Popular TV Shows Shelf */}
-                  <div>
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="font-black text-2xl flex items-center gap-2.5 tracking-tight">
-                        <Tv className="w-6 h-6 text-fuchsia-400" />
-                        Popular TV Shows
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                      {trendingTv.slice(0, 12).map((item, idx) => (
-                        <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
-                      ))}
-                    </div>
+            {/* Unifed Catalog Layout with Shelves */}
+            <div className="flex flex-col gap-12">
+              
+              {/* Local Media Shelf */}
+              {(activeFilter === 'all' || activeFilter === 'local') && richLocalCards.length > 0 && (
+                <div>
+                  <h3 className="font-black text-2xl mb-6 flex items-center gap-2.5 tracking-tight text-emerald-400">
+                    <Server className="w-6 h-6" />
+                    Available Locally (Lossless Audio)
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                    {richLocalCards.map((item, idx) => (
+                      <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
+                    ))}
                   </div>
                 </div>
-              </>
-            )}
-          </div>
-        )}
+              )}
 
-        {/* TAB 3: NETWORK ARCHITECTURE TOPOLOGY */}
-        {activeTab === 'topology' && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="glass-panel p-10 rounded-3xl flex flex-col items-center justify-center min-h-[500px]"
-          >
-            <h2 className="font-extrabold text-3xl mb-3 bg-gradient-to-r from-violet-400 to-pink-500 bg-clip-text text-transparent">SSH mesh & Streaming Architecture</h2>
-            <p className="text-slate-400 text-sm mb-12 text-center max-w-xl">
-              An interactive visual topology mapping the flow of lossless streaming media over your secure Tailscale mesh VPN network.
-            </p>
+              {/* Trending Movies Shelf */}
+              {(activeFilter === 'all' || activeFilter === 'cloud' || activeFilter === 'movies') && (
+                <div>
+                  <h3 className="font-black text-2xl mb-6 flex items-center gap-2.5 tracking-tight">
+                    <Film className="w-6 h-6 text-violet-400" />
+                    Trending Movies
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                    {trendingMovies
+                      .filter(m => activeFilter === 'cloud' ? !findLocalMatch(m.title) : true)
+                      .slice(0, 12)
+                      .map((item, idx) => (
+                        <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
+                      ))}
+                  </div>
+                </div>
+              )}
 
-            <div className="flex flex-col md:flex-row items-center justify-between gap-12 max-w-5xl w-full">
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="glass-panel p-6 rounded-2xl flex flex-col items-center w-64 text-center border-violet-500/20"
-              >
-                <Tv className="w-12 h-12 text-violet-400 mb-3" />
-                <h4 className="font-bold text-lg text-slate-100">Local Client Device</h4>
-                <span className="text-xs text-slate-500 mt-1">TV / Macbook / Tablet</span>
-                <p className="text-xs text-slate-400/70 mt-3 leading-relaxed">Renders responsive React UI. Streams AAC audio & copies high-bitrate video flawlessly.</p>
-              </motion.div>
-
-              <div className="h-10 md:h-0 md:w-20 border-l-2 md:border-t-2 md:border-l-0 border-dashed border-violet-500/40 relative">
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-950 px-2 py-0.5 rounded-full border border-violet-500/30 text-[10px] text-violet-400 font-bold uppercase">Tailnet</div>
-              </div>
-
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="glass-panel p-6 rounded-2xl flex flex-col items-center w-64 text-center border-fuchsia-500/20"
-              >
-                <Cpu className="w-12 h-12 text-fuchsia-400 mb-3" />
-                <h4 className="font-bold text-lg text-slate-100">s001 NixOS Daemon</h4>
-                <span className="text-xs text-slate-500 mt-1">FastAPI / FFmpeg</span>
-                <p className="text-xs text-slate-400/70 mt-3 leading-relaxed">Runs isolated background services. Spawns FFmpeg for on-the-fly AC3/DTS audio translation.</p>
-              </motion.div>
-
-              <div className="h-10 md:h-0 md:w-20 border-l-2 md:border-t-2 md:border-l-0 border-dashed border-violet-500/40 relative">
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-950 px-2 py-0.5 rounded-full border border-fuchsia-500/30 text-[10px] text-fuchsia-400 font-bold uppercase">SATA</div>
-              </div>
-
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="glass-panel p-6 rounded-2xl flex flex-col items-center w-64 text-center border-amber-500/20"
-              >
-                <HardDrive className="w-12 h-12 text-amber-400 mb-3" />
-                <h4 className="font-bold text-lg text-slate-100">HDD Storage Array</h4>
-                <span className="text-xs text-slate-500 mt-1">/mnt/HDD1/media</span>
-                <p className="text-xs text-slate-400/70 mt-3 leading-relaxed">3.6 TB ext4 high-capacity disk storage hosting all movies, tv episodes, and media libraries.</p>
-              </motion.div>
+              {/* Popular TV Shows Shelf */}
+              {(activeFilter === 'all' || activeFilter === 'cloud' || activeFilter === 'tv') && (
+                <div>
+                  <h3 className="font-black text-2xl mb-6 flex items-center gap-2.5 tracking-tight">
+                    <Tv className="w-6 h-6 text-fuchsia-400" />
+                    Popular TV Shows
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                    {trendingTv
+                      .filter(t => activeFilter === 'cloud' ? !findLocalMatch(t.name) : true)
+                      .slice(0, 12)
+                      .map((item, idx) => (
+                        <MediaCard key={idx} item={item} onSelect={loadMediaDetails} localCheck={findLocalMatch} />
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </motion.div>
+          </div>
         )}
       </main>
 
@@ -587,7 +490,7 @@ export default function App() {
               </div>
 
               <p className="text-xs text-slate-400 leading-relaxed">
-                Connect your personal, free API key from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" className="text-violet-400 underline font-semibold">The Movie Database (TMDb)</a> to unlock global media search, dynamic backdrops, and trending categories.
+                Connect your personal, free API key from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" className="text-violet-400 underline font-semibold">TMDb</a> to unlock global media search, dynamic backdrops, and trending categories.
               </p>
 
               <div className="flex flex-col gap-2">
@@ -622,7 +525,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* CLOUD STREAM DETAIL MODAL (CINEBY PLAYER PARITY) */}
+      {/* CLOUD STREAM THEATER MODAL */}
       <AnimatePresence>
         {activeModalItem && (
           <motion.div 
@@ -640,11 +543,16 @@ export default function App() {
               {/* Modal Header */}
               <div className="flex justify-between items-center">
                 <div className="flex gap-4 items-center">
-                  <h2 className="text-3xl font-black tracking-tight text-slate-100">{activeModalItem.title || activeModalItem.name}</h2>
-                  <span className="text-xs bg-violet-600/30 text-violet-300 border border-violet-500/20 px-3 py-1 rounded-full font-extrabold uppercase">Watching Cloud Cinema</span>
+                  <h2 className="text-3xl font-black tracking-tight text-slate-100">{activeModalItem.title || activeModalItem.name || currentLocalPlayName}</h2>
+                  <span className="text-xs bg-violet-600/30 text-violet-300 border border-violet-500/20 px-3 py-1 rounded-full font-extrabold uppercase">
+                    {currentLocalPlayPath ? "Watching Local Lossless" : "Watching Cloud Mirror"}
+                  </span>
                 </div>
                 <button 
-                  onClick={() => setActiveModalItem(null)}
+                  onClick={() => {
+                    setActiveModalItem(null);
+                    setCurrentLocalPlayPath(null);
+                  }}
                   className="p-3 bg-white/5 hover:bg-red-500/20 hover:text-red-400 rounded-full border border-white/10 transition-all"
                 >
                   <X className="w-6 h-6" />
@@ -653,88 +561,119 @@ export default function App() {
 
               {/* Player Frame */}
               <div className="w-full aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-[0_30px_70px_rgba(0,0,0,0.8)] relative">
-                <iframe 
-                  src={
-                    activeModalItem.media_type === 'tv' || (!activeModalItem.media_type && activeModalItem.name)
-                      ? (activeProvider === 'su' 
-                          ? `https://embed.su/embed/tv/${activeModalItem.id}/${selectedSeason}/${selectedEpisode}`
-                          : `https://vidsrc.to/embed/tv/${activeModalItem.id}/${selectedSeason}/${selectedEpisode}`)
-                      : (activeProvider === 'su'
-                          ? `https://embed.su/embed/movie/${activeModalItem.id}`
-                          : `https://vidsrc.to/embed/movie/${activeModalItem.id}`)
-                  }
-                  allowFullScreen
-                  className="w-full h-full"
-                ></iframe>
+                {currentLocalPlayPath ? (
+                  <video 
+                    key={currentLocalPlayPath}
+                    controls 
+                    autoPlay 
+                    className="w-full h-full"
+                  >
+                    <source src={`/stream/${encodeURIComponent(currentLocalPlayPath)}?transcode=${shouldTranscode}`} type="video/mp4" />
+                    Your browser does not support native streaming.
+                  </video>
+                ) : (
+                  <iframe 
+                    src={
+                      activeModalItem.media_type === 'tv' || (!activeModalItem.media_type && activeModalItem.name)
+                        ? (activeProvider === 'su' 
+                            ? `https://embed.su/embed/tv/${activeModalItem.id}/${selectedSeason}/${selectedEpisode}`
+                            : `https://vidsrc.to/embed/tv/${activeModalItem.id}/${selectedSeason}/${selectedEpisode}`)
+                        : (activeProvider === 'su'
+                            ? `https://embed.su/embed/movie/${activeModalItem.id}`
+                            : `https://vidsrc.to/embed/movie/${activeModalItem.id}`)
+                    }
+                    allowFullScreen
+                    className="w-full h-full"
+                  ></iframe>
+                )}
               </div>
 
               {/* Controls, Metadata and Selector */}
               <div className="glass-panel p-8 rounded-3xl flex flex-col md:flex-row justify-between gap-8 items-center">
                 <div className="flex-1">
-                  <p className="text-slate-300 text-sm leading-relaxed max-w-3xl font-medium">{activeModalItem.overview}</p>
-                </div>
-
-                <div className="flex flex-col gap-5 w-full md:w-80 flex-shrink-0">
-                  {/* Provider toggle */}
-                  <div>
-                    <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-2">Mirror Node Server</span>
-                    <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
+                  <p className="text-slate-300 text-sm leading-relaxed max-w-3xl font-medium">
+                    {activeModalItem.overview || "High bitrate direct media stream from local HDD array."}
+                  </p>
+                  {currentLocalPlayPath && (
+                    <div className="flex gap-3 mt-4">
                       <button 
-                        onClick={() => setActiveProvider('su')}
-                        className={`flex-1 text-center py-2 rounded-full font-bold text-xs transition-all ${activeProvider === 'su' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        onClick={() => setShouldTranscode(!shouldTranscode)}
+                        className={`px-5 py-2.5 rounded-full font-bold text-xs flex items-center gap-2 border transition-all ${shouldTranscode ? 'bg-violet-600/20 text-violet-300 border-violet-500/30' : 'bg-white/5 text-slate-400 border-white/10'}`}
                       >
-                        embed.su (Cineby)
+                        <Volume2 className="w-4 h-4" /> Audio Transcoder: {shouldTranscode ? "ON" : "OFF"}
                       </button>
                       <button 
-                        onClick={() => setActiveProvider('to')}
-                        className={`flex-1 text-center py-2 rounded-full font-bold text-xs transition-all ${activeProvider === 'to' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        onClick={copyVlcLink}
+                        className="px-5 py-2.5 rounded-full bg-white/5 border border-white/10 font-bold text-xs hover:bg-white/10 transition-all flex items-center gap-2 text-slate-200"
                       >
-                        vidsrc.to
+                        {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        Copy VLC Stream Link
                       </button>
-                    </div>
-                  </div>
-
-                  {/* Season/Episode selector for TV Series */}
-                  {(activeModalItem.media_type === 'tv' || (!activeModalItem.media_type && activeModalItem.name)) && (
-                    <div className="flex gap-4">
-                      <div className="flex-1">
-                        <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-2">Season</span>
-                        <select 
-                          value={selectedSeason} 
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            setSelectedSeason(val);
-                            fetchEpisodes(activeModalItem.id, val);
-                          }}
-                          className="w-full bg-slate-900 border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold text-sm outline-none cursor-pointer"
-                        >
-                          {seasons.map((s, idx) => (
-                            <option key={idx} value={s.season_number}>Season {s.season_number}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex-1">
-                        <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-2">Episode</span>
-                        <select 
-                          value={selectedEpisode} 
-                          onChange={(e) => setSelectedEpisode(parseInt(e.target.value))}
-                          className="w-full bg-slate-900 border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold text-sm outline-none cursor-pointer"
-                        >
-                          {episodes.map((e, idx) => (
-                            <option key={idx} value={e.episode_number}>Ep {e.episode_number}: {e.name}</option>
-                          ))}
-                        </select>
-                      </div>
                     </div>
                   )}
                 </div>
+
+                {!currentLocalPlayPath && (
+                  <div className="flex flex-col gap-5 w-full md:w-80 flex-shrink-0">
+                    <div>
+                      <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-2">Mirror Node Server</span>
+                      <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
+                        <button 
+                          onClick={() => setActiveProvider('su')}
+                          className={`flex-1 text-center py-2 rounded-full font-bold text-xs transition-all ${activeProvider === 'su' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        >
+                          embed.su
+                        </button>
+                        <button 
+                          onClick={() => setActiveProvider('to')}
+                          className={`flex-1 text-center py-2 rounded-full font-bold text-xs transition-all ${activeProvider === 'to' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        >
+                          vidsrc.to
+                        </button>
+                      </div>
+                    </div>
+
+                    {(activeModalItem.media_type === 'tv' || (!activeModalItem.media_type && activeModalItem.name)) && (
+                      <div className="flex gap-4">
+                        <div className="flex-1">
+                          <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-2">Season</span>
+                          <select 
+                            value={selectedSeason} 
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setSelectedSeason(val);
+                              fetchEpisodes(activeModalItem.id, val);
+                            }}
+                            className="w-full bg-slate-900 border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold text-sm outline-none cursor-pointer"
+                          >
+                            {seasons.map((s, idx) => (
+                              <option key={idx} value={s.season_number}>Season {s.season_number}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-2">Episode</span>
+                          <select 
+                            value={selectedEpisode} 
+                            onChange={(e) => setSelectedEpisode(parseInt(e.target.value))}
+                            className="w-full bg-slate-900 border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold text-sm outline-none cursor-pointer"
+                          >
+                            {episodes.map((e, idx) => (
+                              <option key={idx} value={e.episode_number}>Ep {e.episode_number}: {e.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* DETAILED INFO DRAWER (CINEBY DETAIL POPUP PARITY) */}
+      {/* DETAILED INFO DRAWER (CINEBY DETAIL POPUP PARITY) WITH DYNAMIC LOCAL FILE LIST INSPECTOR */}
       <AnimatePresence>
         {selectedDetailItem && (
           <motion.div 
@@ -749,12 +688,12 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="w-full max-w-[650px] h-full bg-slate-950 border-l border-white/10 shadow-2xl relative flex flex-col overflow-y-auto"
+              className="w-full max-w-[680px] h-full bg-slate-950 border-l border-white/10 shadow-2xl relative flex flex-col overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Backdrop image banner */}
+              {/* Backdrop Image Banner */}
               <div 
-                className="h-80 w-full bg-cover bg-center relative"
+                className="h-80 w-full bg-cover bg-center relative flex-shrink-0"
                 style={{ backgroundImage: `linear-gradient(to top, #020108, transparent), url(https://image.tmdb.org/t/p/original${selectedDetailItem.backdrop_path})` }}
               >
                 <button 
@@ -766,7 +705,7 @@ export default function App() {
               </div>
 
               {/* Content Detail Info */}
-              <div className="p-8 flex-1 flex flex-col gap-6">
+              <div className="p-8 flex-1 flex flex-col gap-6 overflow-y-auto">
                 <div>
                   <div className="flex gap-2 items-center mb-3">
                     <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 rounded-full text-xs font-black flex items-center gap-1"><Star className="w-3.5 h-3.5 fill-amber-400" /> {selectedDetailItem.vote_average ? selectedDetailItem.vote_average.toFixed(1) : "N/A"}</span>
@@ -780,29 +719,35 @@ export default function App() {
                   <p className="text-slate-300 text-sm leading-relaxed font-medium">{selectedDetailItem.overview}</p>
                 </div>
 
-                {/* Local matching indicator */}
+                {/* Local matching indicator & Interactive File Inspector */}
                 {findLocalMatch(selectedDetailItem.title || selectedDetailItem.name) && (
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center justify-between">
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-5 rounded-2xl flex flex-col gap-4">
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
                       <div>
-                        <strong className="text-sm text-emerald-400 block font-bold">Available in Local HDD</strong>
-                        <span className="text-xs text-slate-400 font-medium">You can stream this file directly without cloud delay.</span>
+                        <strong className="text-sm text-emerald-400 block font-bold">Connected to Local Storage Array</strong>
+                        <span className="text-xs text-slate-400 font-medium">Select any lossless file below to play instantly with custom AAC audio.</span>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => {
-                        const localItem = findLocalMatch(selectedDetailItem.title || selectedDetailItem.name);
-                        if (localItem) {
-                          triggerLocalPlay(localItem);
-                          setActiveTab('local');
-                          setSelectedDetailItem(null);
-                        }
-                      }}
-                      className="px-5 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white font-extrabold text-xs transition"
-                    >
-                      Play Local
-                    </button>
+
+                    <div className="mt-2 border-t border-emerald-500/10 pt-4">
+                      <h5 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5"><ListMusic className="w-4 h-4 text-emerald-400" /> Local Playlist Directory</h5>
+                      <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+                        {getFilesList(findLocalMatch(selectedDetailItem.title || selectedDetailItem.name).local_item_ref).map((file, idx) => (
+                          <div 
+                            key={idx}
+                            onClick={() => {
+                              launchLocalPlayer(file.path, file.name);
+                              setSelectedDetailItem(null);
+                            }}
+                            className="bg-slate-900 hover:bg-slate-800 border border-white/5 p-3 rounded-xl flex justify-between items-center cursor-pointer transition-colors"
+                          >
+                            <span className="text-xs font-semibold text-slate-200 truncate pr-4">{file.name}</span>
+                            <span className="text-[10px] text-slate-500 font-bold flex-shrink-0">{(file.size ? file.size / (1024 * 1024) : 0).toFixed(1)} MB</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -823,12 +768,12 @@ export default function App() {
                 <div className="mt-auto pt-8 border-t border-white/5">
                   <button 
                     onClick={() => {
-                      launchCloudStream(selectedDetailItem);
+                      launchCloudPlayer(selectedDetailItem);
                       setSelectedDetailItem(null);
                     }}
                     className="w-full py-4 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-violet-500/25 transition-all hover:scale-102"
                   >
-                    <Play className="w-5 h-5 fill-white" /> Watch Cloud Cinema
+                    <Play className="w-5 h-5 fill-white" /> Watch Cloud Cinema (Aggregator)
                   </button>
                 </div>
               </div>
@@ -841,7 +786,7 @@ export default function App() {
 }
 
 // Media Card Component (TMDb grid element)
-function MediaCard({ item, onSelect, localCheck }: { item: any, onSelect: (x: any) => void, localCheck: (x: string) => MediaFile | null }) {
+function MediaCard({ item, onSelect, localCheck }: { item: any, onSelect: (x: any) => void, localCheck: (x: string) => any }) {
   const title = item.title || item.name;
   const year = (item.release_date || item.first_air_date || '').substring(0, 4);
   const posterPath = item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : null;
@@ -851,7 +796,7 @@ function MediaCard({ item, onSelect, localCheck }: { item: any, onSelect: (x: an
     <motion.div 
       whileHover={{ y: -8 }}
       onClick={() => onSelect(item)}
-      className="bg-white/3 border border-white/10 rounded-2xl overflow-hidden cursor-pointer relative group transition-all duration-300 hover:border-violet-500 hover:shadow-lg hover:shadow-violet-500/10"
+      className="bg-white/3 border border-white/10 rounded-2xl overflow-hidden cursor-pointer relative group transition-all duration-300 hover:border-violet-500 hover:shadow-lg hover:shadow-violet-500/10 poster-zoom"
     >
       {posterPath ? (
         <img src={posterPath} alt={title} className="w-full aspect-[2/3] object-cover bg-slate-900" />
@@ -863,7 +808,7 @@ function MediaCard({ item, onSelect, localCheck }: { item: any, onSelect: (x: an
       )}
       
       {localMatch && (
-        <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-0.5 shadow-lg shadow-emerald-500/20">
+        <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-0.5 shadow-lg shadow-emerald-500/25">
           <Check className="w-2.5 h-2.5" /> Lossless
         </div>
       )}

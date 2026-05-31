@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-deep: #05020c;
-  --color-bg-base: #0b071e;
-  --color-bg-surface: rgba(18, 12, 38, 0.6);
+  --color-bg-deep: #030108;
+  --color-bg-base: #090516;
+  --color-bg-surface: rgba(15, 10, 32, 0.6);
   --color-accent-primary: #8b5cf6;
   --color-accent-secondary: #ec4899;
   --color-text-bright: #ffffff;
@@ -19,7 +19,7 @@ body {
   overflow-x: hidden;
 }
 
-/* Premium custom scrollbar */
+/* Premium scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -28,52 +28,43 @@ body {
   background: rgba(0, 0, 0, 0.3);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(139, 92, 246, 0.25);
+  background: rgba(139, 92, 246, 0.3);
   border-radius: 20px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(139, 92, 246, 0.6);
 }
 
-/* Glassmorphism primitives */
-.glass-effect {
-  background: rgba(15, 10, 32, 0.5);
-  backdrop-filter: blur(24px) saturate(160%);
+.glass-panel {
+  background: rgba(15, 10, 32, 0.55);
+  backdrop-filter: blur(24px) saturate(170%);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.6);
 }
 
-.glass-nav {
-  background: rgba(5, 2, 12, 0.7);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-/* Cineby Card Styling */
-.media-card-shadow {
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-}
-.media-card-shadow:hover {
-  box-shadow: 0 20px 40px -10px rgba(139, 92, 246, 0.25);
-}
-
-/* High fidelity cinematic hero text gradient */
 .hero-text-glow {
   background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-/* Fullscreen backdrop blur transitions */
 .backdrop-blur-overlay {
-  background: radial-gradient(circle at 50% 30%, rgba(30, 16, 75, 0.3), var(--color-bg-deep) 80%);
+  background: radial-gradient(circle at 50% 20%, rgba(32, 14, 82, 0.35), var(--color-bg-deep) 80%);
 }
 
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* Movie Card Poster Zoom */
+.poster-zoom img {
+  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.poster-zoom:hover img {
+  transform: scale(1.06);
 }
 
-.animate-spin-slow {
-  animation: spin-slow 20s infinite linear;
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.08); opacity: 0.7; }
+}
+
+.animate-pulse-slow {
+  animation: pulse 2.5s infinite ease-in-out;
 }
