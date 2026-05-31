@@ -45,7 +45,7 @@ def list_media():
                     })
                 else:
                     ext = os.path.splitext(entry.name)[1].lower()
-                    if ext in ['.mp4', '.mkv', '.avi', '.mov', '.webm']:
+                    if ext in ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.srt', '.vtt']:
                         items.append({
                             "name": entry.name,
                             "type": "file",
