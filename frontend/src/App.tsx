@@ -5,7 +5,7 @@ import {
   Tv, Film, Copy, Check, HardDrive, RefreshCw, Star, Sparkles, Key, ListMusic,
   Pause, RotateCcw, VolumeX, Maximize, Settings, ShieldAlert, ChevronRight,
   TrendingUp, Award, Clock, Database, Radio, Layers, Subtitles, Sliders,
-  HelpCircle, Trash2, Edit, Plus, Monitor
+  HelpCircle, Trash2, Edit, Plus, Monitor, ChevronLeft, ArrowRight
 } from 'lucide-react';
 import './App.css';
 
@@ -24,6 +24,13 @@ interface ServerNode {
   status: 'online' | 'offline' | 'checking';
 }
 
+interface CloudProvider {
+  id: string;
+  name: string;
+  getMovieUrl: (id: string | number) => string;
+  getTvUrl: (id: string | number, s: number, e: number) => string;
+}
+
 export default function App() {
   const [localMedia, setLocalMedia] = useState<MediaFile[]>([]);
   const [localLoading, setLocalLoading] = useState(true);
@@ -31,6 +38,11 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'unwatched' | 'inprogress' | 'completed'>('all');
   const [sortBy, setSortBy] = useState<'rating' | 'year' | 'title'>('rating');
   
+  // Sidebar state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('tailstreamer_sidebar_collapsed') === 'true';
+  });
+
   // TMDb API Key state
   const [tmdbKey, setTmdbKey] = useState<string>(() => localStorage.getItem('tmdb_api_key') || '');
   const [keyInput, setKeyInput] = useState('');
@@ -76,7 +88,47 @@ export default function App() {
   const [activePlayPath, setActivePlayPath] = useState<string | null>(null);
   const [activePlayName, setActivePlayName] = useState('');
   const [activeCloudItem, setActiveCloudItem] = useState<any>(null);
-  const [activeProvider, setActiveProvider] = useState<'su' | 'to'>('su');
+  
+  // Cineby style multi-source cloud providers list
+  const [cloudProviders] = useState<CloudProvider[]>([
+    {
+      id: 'embed_su',
+      name: 'Embed.su (Premium Fast)',
+      getMovieUrl: (id) => `https://embed.su/embed/movie/${id}`,
+      getTvUrl: (id, s, e) => `https://embed.su/embed/tv/${id}/${s}/${e}`
+    },
+    {
+      id: 'vidsrc_to',
+      name: 'VidSrc.to (Stable HQ)',
+      getMovieUrl: (id) => `https://vidsrc.to/embed/movie/${id}`,
+      getTvUrl: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}`
+    },
+    {
+      id: 'vidsrc_me',
+      name: 'VidSrc.me (No Ads)',
+      getMovieUrl: (id) => `https://vidsrc.me/embed/movie?tmdb=${id}`,
+      getTvUrl: (id, s, e) => `https://vidsrc.me/embed/tv?tmdb=${id}&season=${s}&episode=${e}`
+    },
+    {
+      id: 'smashy',
+      name: 'SmashyStream (Auto Multi)',
+      getMovieUrl: (id) => `https://embed.smashystream.com/playere.php?tmdb=${id}`,
+      getTvUrl: (id, s, e) => `https://embed.smashystream.com/playere.php?tmdb=${id}&season=${s}&episode=${e}`
+    },
+    {
+      id: 'autoembed',
+      name: 'AutoEmbed (Ad-Bypass)',
+      getMovieUrl: (id) => `https://player.autoembed.co/movie/${id}`,
+      getTvUrl: (id, s, e) => `https://player.autoembed.co/tv/${id}/${s}/${e}`
+    },
+    {
+      id: 'twoembed',
+      name: '2Embed (Cloud Backup)',
+      getMovieUrl: (id) => `https://www.2embed.cc/embed/${id}`,
+      getTvUrl: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`
+    }
+  ]);
+  const [activeProviderId, setActiveProviderId] = useState<string>('embed_su');
   
   // Custom video controller states
   const [isPlaying, setIsPlaying] = useState(true);
@@ -85,7 +137,7 @@ export default function App() {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [bufferProgress, setBufferProgress] = useState(35); // Simulated live network buffer progress
+  const [bufferProgress, setBufferProgress] = useState(35); // Simulated buffer progress
 
   // Season / Episode TV selection
   const [seasons, setSeasons] = useState<any[]>([]);
@@ -97,7 +149,6 @@ export default function App() {
   const [subtitlesList, setSubtitlesList] = useState<{ name: string, path: string }[]>([]);
   const [activeSubtitlePath, setActiveSubtitlePath] = useState<string>('');
   const [customSubtitleUrl, setCustomSubtitleUrl] = useState<string>('');
-  const [subtitleTracks, setSubtitleTracks] = useState<{ src: string, label: string, lang: string }[]>([]);
 
   // Transcode states
   const [shouldTranscode, setShouldTranscode] = useState(true);
@@ -113,36 +164,28 @@ export default function App() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Filename Cleaning Helper (Plex style auto-matching)
+  // Focus floating search dock on keypress
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Filename Cleaning Helper
   const cleanFilenameToTitle = (filename: string): { title: string, year?: string } => {
-    // Remove extension
     let name = filename.replace(/\.[^/.]+$/, "");
-    
-    // Check for year
     const yearMatch = name.match(/\b(19\d\d|20\d\d)\b/);
     const year = yearMatch ? yearMatch[0] : undefined;
-
-    // Clean common scene tags & release details
     name = name.replace(/\b(1080p|720p|480p|2160p|4k|uhd|bluray|hdtv|web-dl|webrip|brrip|x264|h264|x265|hevc|aac|dts|ac3|dd5\.1|dual-audio|multi|sub|yts|yify|rarbg|psa|eztv|pahe|qxr)\b/gi, " ");
-    // Replace dots, underscores, dashes with spaces
     name = name.replace(/[\._\-]/g, " ");
-    // Clean multiple spaces
     name = name.replace(/\s+/g, " ").trim();
-
-    // If year was found, truncate name at the year
     if (year) {
       const parts = name.split(year);
       if (parts[0].trim()) {
         name = parts[0].trim();
       }
     }
-
     return { title: name, year };
   };
 
   useEffect(() => {
     fetchLocalLibrary();
-    // Load watch progress from localStorage
     const saved = localStorage.getItem('tailstreamer_watch_progress');
     if (saved) {
       try {
@@ -154,6 +197,16 @@ export default function App() {
     if (tmdbKey) {
       fetchTrendingContent();
     }
+    
+    // Add forward slash listener to focus search dock
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '/' && document.activeElement !== searchInputRef.current) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [tmdbKey, activeServerId]);
 
   useEffect(() => {
@@ -166,6 +219,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('tailstreamer_servers', JSON.stringify(servers));
   }, [servers]);
+
+  const toggleSidebar = () => {
+    const nextState = !sidebarCollapsed;
+    setSidebarCollapsed(nextState);
+    localStorage.setItem('tailstreamer_sidebar_collapsed', String(nextState));
+  };
 
   // Update watch history in state and local storage
   const updateWatchProgress = (mediaId: string, time: number, total: number) => {
@@ -259,7 +318,6 @@ export default function App() {
     for (const item of localMedia) {
       const key = item.name.toLowerCase();
       
-      // 1. Check custom mappings first
       const customMapping = customMappings[key];
       if (customMapping) {
         try {
@@ -277,7 +335,6 @@ export default function App() {
         }
       }
 
-      // 2. Check static config maps
       const staticMapping = LOCAL_METADATA_MAP[key];
       if (staticMapping) {
         try {
@@ -295,7 +352,6 @@ export default function App() {
         }
       }
 
-      // 3. Fallback to Dynamic Automatcher using cleanFilenameToTitle
       const { title, year } = cleanFilenameToTitle(item.name);
       try {
         let searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${tmdbKey}&query=${encodeURIComponent(title)}`;
@@ -304,7 +360,6 @@ export default function App() {
         const searchData = await searchRes.json();
         
         if (searchData.results && searchData.results.length > 0) {
-          // Find first movie or tv show result
           const matched = searchData.results.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv');
           if (matched) {
             cards.push({
@@ -353,7 +408,6 @@ export default function App() {
     setDetailLoading(false);
   };
 
-  // Metadata manual rematcher function
   const handleRematchSearch = async () => {
     if (!rematchSearchQuery.trim() || !tmdbKey) return;
     setRematchLoading(true);
@@ -382,7 +436,6 @@ export default function App() {
     setCustomMappings(updated);
     localStorage.setItem('tailstreamer_custom_mappings', JSON.stringify(updated));
     
-    // Update active details state
     setSelectedDetailItem({ ...item, is_local: true, local_item_ref: localMatch.local_item_ref });
     setShowRematchModal(false);
     setRematchResults([]);
@@ -436,7 +489,6 @@ export default function App() {
     setIsPlaying(true);
     setCurrentTime(0);
     
-    // Parse captions inside directory if multiple files exist
     if (dirChildren) {
       const subs = dirChildren.filter(c => {
         const ext = c.name.split('.').pop()?.toLowerCase();
@@ -454,7 +506,6 @@ export default function App() {
       setActiveSubtitlePath('');
     }
 
-    // Simulate initial buffering values
     setBufferProgress(12);
     const interval = setInterval(() => {
       setBufferProgress(prev => {
@@ -467,7 +518,6 @@ export default function App() {
     }, 600);
   };
 
-  // Convert SRT subtitles to VTT at runtime if needed, or point directly
   const getSubtitleUrl = () => {
     if (customSubtitleUrl) return customSubtitleUrl;
     if (!activeSubtitlePath) return "";
@@ -529,7 +579,6 @@ export default function App() {
     if (!videoRef.current) return;
     setDuration(videoRef.current.duration);
     
-    // Auto-resume checking
     const prevProgress = watchProgress[activePlayPath || activePlayName];
     if (prevProgress && prevProgress < 95) {
       const targetTime = (prevProgress / 100) * videoRef.current.duration;
@@ -580,7 +629,6 @@ export default function App() {
     setShowKeyModal(false);
   };
 
-  // Add Server configuration
   const handleAddServer = () => {
     if (newServerName.trim() && newServerUrl.trim()) {
       const newServer: ServerNode = {
@@ -597,7 +645,7 @@ export default function App() {
   };
 
   const handleDeleteServer = (id: string) => {
-    if (id === 's001') return; // Cannot delete base server
+    if (id === 's001') return;
     const updated = servers.filter(s => s.id !== id);
     setServers(updated);
     if (activeServerId === id) {
@@ -611,11 +659,9 @@ export default function App() {
     localStorage.setItem('tailstreamer_active_server', id);
   };
 
-  // Apply sorting and filtering logic to active shelves
   const processMediaList = (list: any[]) => {
     let processed = [...list];
     
-    // Sort logic
     if (sortBy === 'rating') {
       processed.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
     } else if (sortBy === 'year') {
@@ -632,7 +678,6 @@ export default function App() {
       });
     }
 
-    // Status filter
     if (statusFilter !== 'all') {
       processed = processed.filter(item => {
         const matched = findLocalMatch(item.title || item.name);
@@ -649,59 +694,89 @@ export default function App() {
     return processed;
   };
 
+  const getActiveCloudStreamUrl = () => {
+    if (!activeCloudItem) return "";
+    const isTv = activeCloudItem.media_type === 'tv' || (!activeCloudItem.media_type && activeCloudItem.name);
+    const provider = cloudProviders.find(p => p.id === activeProviderId) || cloudProviders[0];
+    
+    if (isTv) {
+      return provider.getTvUrl(activeCloudItem.id, selectedSeason, selectedEpisode);
+    } else {
+      return provider.getMovieUrl(activeCloudItem.id);
+    }
+  };
+
   return (
     <div 
-      className="min-h-screen text-slate-100 pb-24 select-none relative flex flex-row" 
+      className="min-h-screen text-slate-100 pb-36 select-none relative flex flex-row" 
       style={{ '--color-glow-color': glowColor } as React.CSSProperties}
     >
       {/* Canvas-backed Ambient Backlight Glow Layer */}
       <div className="ambient-glow-layer"></div>
 
-      {/* Dynamic Modern Sidebar Navigation */}
-      <aside className="w-[280px] bg-slate-950/80 border-r border-white/5 backdrop-blur-3xl p-8 flex flex-col justify-between sticky top-0 h-screen z-[100] flex-shrink-0">
+      {/* Dynamic Collapsable Sidebar Navigation (Cineby style layout) */}
+      <aside 
+        className={`bg-slate-950/80 border-r border-white/5 backdrop-blur-3xl p-6 flex flex-col justify-between sticky top-0 h-screen z-[100] flex-shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-[80px]' : 'w-[280px]'}`}
+      >
         <div className="flex flex-col gap-8">
-          <div className="flex items-center gap-3 font-extrabold text-2xl tracking-tight bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-500 bg-clip-text text-transparent cursor-pointer">
-            <Play className="w-8 h-8 text-violet-500 fill-violet-500 drop-shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
-            <span>TailStreamer</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <Play className="w-8 h-8 text-violet-500 fill-violet-500 drop-shadow-[0_0_10px_rgba(139,92,246,0.5)] flex-shrink-0" />
+              {!sidebarCollapsed && (
+                <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-500 bg-clip-text text-transparent truncate">TailStreamer</span>
+              )}
+            </div>
+            <button 
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-white transition"
+            >
+              {sidebarCollapsed ? <ArrowRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+            </button>
           </div>
 
           {/* Nav Links */}
           <nav className="flex flex-col gap-2">
-            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Navigation</div>
+            {!sidebarCollapsed && <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Navigation</div>}
+            
             <button 
               onClick={() => setActiveFilter('all')}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200 ${activeFilter === 'all' ? 'bg-gradient-to-r from-violet-600/30 to-fuchsia-600/30 text-white border border-violet-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}`}
+              title="All Media Catalog"
             >
-              <Sparkles className="w-4 h-4 text-violet-400" />
-              <span>All Media Catalog</span>
+              <Sparkles className="w-4 h-4 text-violet-400 flex-shrink-0" />
+              {!sidebarCollapsed && <span>All Media</span>}
             </button>
             <button 
               onClick={() => setActiveFilter('local')}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200 ${activeFilter === 'local' ? 'bg-gradient-to-r from-violet-600/30 to-fuchsia-600/30 text-white border border-violet-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}`}
+              title="Available Lossless"
             >
-              <Server className="w-4 h-4 text-emerald-400" />
-              <span>Available Lossless</span>
+              <Server className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              {!sidebarCollapsed && <span>Available Lossless</span>}
             </button>
             <button 
               onClick={() => setActiveFilter('cloud')}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200 ${activeFilter === 'cloud' ? 'bg-gradient-to-r from-violet-600/30 to-fuchsia-600/30 text-white border border-violet-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}`}
+              title="Cloud Only"
             >
-              <Cloud className="w-4 h-4 text-sky-400" />
-              <span>Cloud Only</span>
+              <Cloud className="w-4 h-4 text-sky-400 flex-shrink-0" />
+              {!sidebarCollapsed && <span>Cloud Only</span>}
             </button>
             <button 
               onClick={() => setActiveFilter('movies')}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200 ${activeFilter === 'movies' ? 'bg-gradient-to-r from-violet-600/30 to-fuchsia-600/30 text-white border border-violet-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}`}
+              title="Movies Stream"
             >
-              <Film className="w-4 h-4 text-amber-400" />
-              <span>Movies Stream</span>
+              <Film className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              {!sidebarCollapsed && <span>Movies Stream</span>}
             </button>
             <button 
               onClick={() => setActiveFilter('tv')}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200 ${activeFilter === 'tv' ? 'bg-gradient-to-r from-violet-600/30 to-fuchsia-600/30 text-white border border-violet-500/20' : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'}`}
+              title="TV Series"
             >
-              <Tv className="w-4 h-4 text-pink-400" />
-              <span>TV Series</span>
+              <Tv className="w-4 h-4 text-pink-400 flex-shrink-0" />
+              {!sidebarCollapsed && <span>TV Series</span>}
             </button>
           </nav>
         </div>
@@ -711,8 +786,10 @@ export default function App() {
           <button 
             onClick={() => setShowSettings(true)}
             className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl font-bold text-xs bg-slate-900 border border-white/5 text-slate-300 hover:bg-white/5 hover:border-white/10 transition-all"
+            title="Settings"
           >
-            <Settings className="w-4 h-4" /> Switch Server & Settings
+            <Settings className="w-4 h-4 flex-shrink-0" />
+            {!sidebarCollapsed && <span>Settings</span>}
           </button>
 
           <button 
@@ -720,9 +797,11 @@ export default function App() {
               setKeyInput(tmdbKey);
               setShowKeyModal(true);
             }}
-            className={`w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-black text-xs border transition-all duration-200 ${tmdbKey ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-gradient-to-r from-amber-600 to-amber-700 text-white animate-pulse shadow-lg'}`}
+            className={`w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-black text-xs border transition-all duration-200 ${tmdbKey ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-gradient-to-r from-amber-600 to-amber-700 text-white shadow-lg'}`}
+            title="TMDb API Key"
           >
-            <Key className="w-4 h-4" /> {tmdbKey ? "TMDb Connected" : "Connect TMDb Key"}
+            <Key className="w-4 h-4 flex-shrink-0" />
+            {!sidebarCollapsed && <span>TMDb Connection</span>}
           </button>
         </div>
       </aside>
@@ -742,23 +821,11 @@ export default function App() {
             </span>
           </div>
 
-          {/* Search bar */}
-          <div className="w-[400px] flex bg-white/5 border border-white/10 rounded-full py-1.5 px-4 items-center focus-within:border-violet-500 focus-within:shadow-[0_0_20px_rgba(139,92,246,0.15)] transition-all">
-            <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
-            <input 
-              type="text" 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Search movies, TV shows, and series..."
-              className="flex-1 bg-transparent border-none text-white outline-none px-3 py-1 font-semibold text-xs"
-            />
-            <button 
-              onClick={handleSearch}
-              className="bg-white/5 hover:bg-white/10 text-white text-[10px] font-black px-4 py-1.5 rounded-full transition-all border border-white/10"
-            >
-              Search
-            </button>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+              {servers.find(s => s.id === activeServerId)?.name}
+            </span>
           </div>
         </header>
 
@@ -769,25 +836,25 @@ export default function App() {
             <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
               <button 
                 onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${statusFilter === 'all' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${statusFilter === 'all' ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
               >
                 All
               </button>
               <button 
                 onClick={() => setStatusFilter('unwatched')}
-                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${statusFilter === 'unwatched' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${statusFilter === 'unwatched' ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
               >
                 Unwatched
               </button>
               <button 
                 onClick={() => setStatusFilter('inprogress')}
-                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${statusFilter === 'inprogress' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${statusFilter === 'inprogress' ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
               >
                 In Progress
               </button>
               <button 
                 onClick={() => setStatusFilter('completed')}
-                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${statusFilter === 'completed' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${statusFilter === 'completed' ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
               >
                 Watched
               </button>
@@ -799,19 +866,19 @@ export default function App() {
             <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
               <button 
                 onClick={() => setSortBy('rating')}
-                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${sortBy === 'rating' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${sortBy === 'rating' ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
               >
                 TMDb Rating
               </button>
               <button 
                 onClick={() => setSortBy('year')}
-                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${sortBy === 'year' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${sortBy === 'year' ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
               >
                 Release Year
               </button>
               <button 
                 onClick={() => setSortBy('title')}
-                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${sortBy === 'title' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-3 py-1 rounded-full font-bold text-[9px] uppercase transition-all ${sortBy === 'title' ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
               >
                 Alphabetical
               </button>
@@ -822,7 +889,6 @@ export default function App() {
         {/* Main Grid View */}
         <main className="flex-1 px-12 py-10">
           
-          {/* TMDb Connection Needed */}
           {!tmdbKey ? (
             <div className="glass-panel p-16 rounded-3xl text-center max-w-2xl mx-auto flex flex-col items-center gap-6 border-amber-500/20 shadow-2xl mt-12">
               <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-400 animate-pulse">
@@ -944,7 +1010,42 @@ export default function App() {
         </main>
       </div>
 
-      {/* Settings Modal (Multiple Servers & Streaming Preferences Panel) */}
+      {/* Dynamic Floating Search Dock at bottom middle (macOS dock style) */}
+      {tmdbKey && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[550px] z-[500] pointer-events-auto">
+          <div className="glass-panel py-3 px-5 rounded-full flex items-center gap-3 border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.6)] focus-within:border-violet-500 focus-within:shadow-[0_20px_50px_rgba(139,92,246,0.25)] transition-all duration-300">
+            <Search className="w-5 h-5 text-slate-400 flex-shrink-0" />
+            <input 
+              ref={searchInputRef}
+              type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="Search catalog... (Press '/' to focus)"
+              className="flex-1 bg-transparent border-none text-white outline-none px-2 py-1 text-sm font-semibold placeholder:text-slate-500"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}
+                className="p-1 text-slate-400 hover:text-white rounded-full hover:bg-white/10 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            <button 
+              onClick={handleSearch}
+              className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white text-[10px] font-black px-5 py-2 rounded-full transition-all shadow-md shadow-violet-500/20 hover:scale-105"
+            >
+              Search
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
       <AnimatePresence>
         {showSettings && (
           <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[1010] flex justify-center items-center p-6">
@@ -1242,15 +1343,7 @@ export default function App() {
                 </video>
               ) : (
                 <iframe 
-                  src={
-                    activeCloudItem.media_type === 'tv' || (!activeCloudItem.media_type && activeCloudItem.name)
-                      ? (activeProvider === 'su' 
-                          ? `https://embed.su/embed/tv/${activeCloudItem.id}/${selectedSeason}/${selectedEpisode}`
-                          : `https://vidsrc.to/embed/tv/${activeCloudItem.id}/${selectedSeason}/${selectedEpisode}`)
-                      : (activeProvider === 'su'
-                          ? `https://embed.su/embed/movie/${activeCloudItem.id}`
-                          : `https://vidsrc.to/embed/movie/${activeCloudItem.id}`)
-                  }
+                  src={getActiveCloudStreamUrl()}
                   allowFullScreen
                   className="w-full h-full border-none"
                 ></iframe>
@@ -1262,7 +1355,9 @@ export default function App() {
                 <div className="flex justify-between items-center">
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="bg-red-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-widest animate-pulse">Live Transcoder Stream</span>
+                      <span className="bg-red-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-widest animate-pulse">
+                        {activePlayPath ? "Live Transcoder Stream" : "Aggregated Cloud Stream"}
+                      </span>
                       {activePlayPath && (
                         <span className="bg-white/10 text-slate-300 text-[9px] font-bold px-2 py-0.5 rounded border border-white/5">Buffer Rate: {(bufferProgress < 100) ? `${Math.floor(Math.random() * 4) + 1} MB/s` : 'Stable'}</span>
                       )}
@@ -1319,7 +1414,7 @@ export default function App() {
 
                   {/* Overlaid player controls */}
                   <div className="flex justify-between items-center bg-slate-950/80 backdrop-blur-2xl p-4 rounded-2xl border border-white/5">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
                       {activePlayPath ? (
                         <>
                           <button onClick={handlePlayPause} className="text-white hover:text-violet-400 transition bg-white/5 hover:bg-white/10 p-3 rounded-full border border-white/5">
@@ -1391,21 +1486,48 @@ export default function App() {
                           </button>
                         </>
                       ) : (
-                        <div className="flex gap-4">
-                          <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1.5 mr-2"><Server className="w-4 h-4 text-violet-400" /> Server Mirror Node Selector:</span>
-                          <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
-                            <button 
-                              onClick={() => setActiveProvider('su')}
-                              className={`px-4 py-1.5 rounded-full font-bold text-[9px] uppercase transition-all ${activeProvider === 'su' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                            >
-                              embed.su (High Speed)
-                            </button>
-                            <button 
-                              onClick={() => setActiveProvider('to')}
-                              className={`px-4 py-1.5 rounded-full font-bold text-[9px] uppercase transition-all ${activeProvider === 'to' ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
-                            >
-                              vidsrc.to (Backup Mirror)
-                            </button>
+                        <div className="flex flex-col gap-3 w-full">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-400 font-bold flex items-center gap-1.5"><Server className="w-4 h-4 text-violet-400" /> Cineby Cloud Router Multi-Source Resolver:</span>
+                            {/* Season / Episode navigation if TV show */}
+                            {(activeCloudItem.media_type === 'tv' || (!activeCloudItem.media_type && activeCloudItem.name)) && seasons.length > 0 && (
+                              <div className="flex items-center gap-2">
+                                <select 
+                                  value={selectedSeason} 
+                                  onChange={(e) => {
+                                    const s = parseInt(e.target.value);
+                                    setSelectedSeason(s);
+                                    fetchEpisodes(activeCloudItem.id, s);
+                                  }}
+                                  className="bg-slate-900 border border-white/10 text-white px-2 py-1 rounded text-[10px] outline-none font-bold"
+                                >
+                                  {seasons.map((s, idx) => (
+                                    <option key={idx} value={s.season_number}>Season {s.season_number}</option>
+                                  ))}
+                                </select>
+                                <select 
+                                  value={selectedEpisode} 
+                                  onChange={(e) => setSelectedEpisode(parseInt(e.target.value))}
+                                  className="bg-slate-900 border border-white/10 text-white px-2 py-1 rounded text-[10px] outline-none font-bold"
+                                >
+                                  {episodes.map((ep, idx) => (
+                                    <option key={idx} value={ep.episode_number}>Episode {ep.episode_number}: {ep.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-2">
+                            {cloudProviders.map((p) => (
+                              <button 
+                                key={p.id}
+                                onClick={() => setActiveProviderId(p.id)}
+                                className={`px-4 py-2 rounded-xl font-bold text-[10px] uppercase transition-all border ${activeProviderId === p.id ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 border-violet-500 text-white shadow-lg' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'}`}
+                              >
+                                {p.name}
+                              </button>
+                            ))}
                           </div>
                         </div>
                       )}
@@ -1428,9 +1550,7 @@ export default function App() {
             transition={{ type: "spring", damping: 25, stiffness: 120 }}
             className="fixed top-0 right-0 h-screen w-[580px] bg-slate-950/98 z-[900] border-l border-white/10 shadow-2xl flex flex-col justify-between overflow-y-auto"
           >
-            {/* Split Info Catalog Detail Grid */}
             <div className="flex flex-col">
-              {/* Immersive Widescreen Backdrop Banner */}
               <div 
                 className="w-full h-[320px] bg-cover bg-center relative border-b border-white/5"
                 style={{ backgroundImage: `linear-gradient(to top, rgba(2,1,6,1) 15%, transparent), url(https://image.tmdb.org/t/p/original${selectedDetailItem.backdrop_path})` }}
@@ -1513,7 +1633,6 @@ export default function App() {
                           <div 
                             key={idx}
                             onClick={() => {
-                              // Pass folder siblings to scan for subs
                               const matchNode = findLocalMatch(selectedDetailItem.title || selectedDetailItem.name);
                               launchLocalPlayer(file.path, file.name, matchNode.local_item_ref.children);
                               setSelectedDetailItem(null);
@@ -1570,7 +1689,6 @@ function MediaCard({ item, onSelect, localCheck, watchProgress }: { item: any, o
   const posterPath = item.poster_path ? `https://image.tmdb.org/t/p/w300${item.poster_path}` : null;
   const localMatch = localCheck(title);
   
-  // Find any child file progress to overlay
   let progress = 0;
   if (localMatch && localMatch.local_item_ref) {
     if (localMatch.local_item_ref.type === 'file') {
