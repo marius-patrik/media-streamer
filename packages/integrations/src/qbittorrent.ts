@@ -130,7 +130,7 @@ async function login(fetchFn: FetchLike, baseUrl: string, username: string, pass
   if (!response.ok)
     throw new QbittorrentIntegrationError(`qBittorrent login failed with HTTP ${response.status}`, response.status);
   const text = await response.text();
-  if (text.trim() !== "Ok.")
+  if (text.trim() && text.trim() !== "Ok.")
     throw new QbittorrentIntegrationError("qBittorrent login rejected credentials", response.status);
   const cookie = response.headers.get("set-cookie")?.split(";")[0] ?? null;
   if (!cookie)

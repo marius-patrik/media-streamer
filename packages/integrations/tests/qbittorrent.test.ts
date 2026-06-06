@@ -18,6 +18,17 @@ describe("qBittorrent client", () => {
     expect(calls).toEqual(["/api/v2/auth/login"]);
   });
 
+  test("accepts empty successful login responses", async () => {
+    const client = createQbittorrentClient({
+      baseUrl: "http://qbittorrent:8080",
+      username: "admin",
+      password: "secret",
+      fetchFn: async () => new Response("", { status: 204, headers: { "set-cookie": "SID=abc; HttpOnly" } }),
+    });
+
+    await expect(client.login()).resolves.toBe("SID=abc");
+  });
+
   test("adds a magnet with category and save path", async () => {
     const requests: Array<{ path: string; body: string; cookie: string | null }> = [];
     const client = createQbittorrentClient({
