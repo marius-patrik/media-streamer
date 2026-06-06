@@ -21,6 +21,7 @@ tar --exclude='./node_modules' --exclude='./dist' --exclude='./.env' --exclude='
 test -s "${archive}"
 echo "archive_path=${archive}"
 
+git pull --ff-only origin main
 docker compose -f ops/docker/compose.yml up -d --wait postgres
 ops/scripts/backup-db.sh
 docker compose -f ops/docker/compose.yml build app
