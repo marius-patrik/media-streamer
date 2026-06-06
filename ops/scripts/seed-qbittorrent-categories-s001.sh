@@ -12,14 +12,28 @@ if [[ ! -f "${categories_file}" ]]; then
   printf '{}\n' >"${categories_file}"
 fi
 
-bun -e '
-const file = process.argv[2];
-const fs = await import("node:fs/promises");
-const raw = await fs.readFile(file, "utf8").catch(() => "{}");
-const data = raw.trim() ? JSON.parse(raw) : {};
-data.tailstreamer = { name: "tailstreamer", save_path: "/downloads/complete" };
-data["tailstreamer-review"] = { name: "tailstreamer-review", save_path: "/downloads/complete" };
-await fs.writeFile(file, `${JSON.stringify(data, null, 2)}\n`);
-' "${categories_file}"
+if grep -q '"tailstreamer"' "${categories_file}"; then
+  echo "qbittorrent_categories=already_seeded"
+  exit 0
+fi
+
+compact="$(tr -d '[:space:]' <"${categories_file}")"
+if [[ "${compact}" != "{}" && -n "${compact}" ]]; then
+  echo "qbittorrent_categories=skipped_existing_nonempty"
+  exit 0
+fi
+
+cat >"${categories_file}" <<'JSON'
+{
+  "tailstreamer": {
+    "name": "tailstreamer",
+    "save_path": "/downloads/complete"
+  },
+  "tailstreamer-review": {
+    "name": "tailstreamer-review",
+    "save_path": "/downloads/complete"
+  }
+}
+JSON
 
 echo "qbittorrent_categories=seeded"
