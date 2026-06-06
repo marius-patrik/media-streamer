@@ -7,6 +7,7 @@ export type QbittorrentClientOptions = {
 
 export type QbittorrentClient = {
   login(): Promise<string>;
+  createCategory(input: { name: string; savePath: string }): Promise<void>;
   addMagnet(input: { magnetUri: string; category: string; savePath: string }): Promise<void>;
   listTorrents(): Promise<QbittorrentTorrent[]>;
   pause(hash: string): Promise<void>;
@@ -47,6 +48,18 @@ export function createQbittorrentClient(options: QbittorrentClientOptions): Qbit
     async login() {
       cookie = await login(fetchFn, baseUrl, options.username, options.password);
       return cookie;
+    },
+
+    async createCategory(input) {
+      const form = new URLSearchParams({
+        category: input.name,
+        savePath: input.savePath,
+      });
+      await request(fetchFn, baseUrl, "torrents/createCategory", {
+        method: "POST",
+        body: form,
+        cookie: cookie ?? (await this.login()),
+      });
     },
 
     async addMagnet(input) {

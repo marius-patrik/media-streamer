@@ -23,6 +23,10 @@ export async function writeJsonSetting(prisma: PrismaClient, key: string, value:
   });
 }
 
+export async function writeStringSetting(prisma: PrismaClient, key: string, value: string) {
+  return writeJsonSetting(prisma, key, { value: value.trim() });
+}
+
 function isSettingObject(value: unknown): value is { value?: unknown } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

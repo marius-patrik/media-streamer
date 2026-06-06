@@ -691,6 +691,29 @@ function AdminRoute() {
   const prowlarr = trpc.downloads.prowlarrStatus.useQuery();
   const qbit = trpc.downloads.qbittorrentStatus.useQuery();
   const providers = trpc.cloud.listProviders.useQuery();
+  const updateTmdbApiKey = trpc.admin.updateTmdbApiKey.useMutation({
+    onSuccess() {
+      utils.metadata.tmdbStatus.invalidate();
+      setTmdbApiKey("");
+    },
+  });
+  const updateProwlarrApiKey = trpc.admin.updateProwlarrApiKey.useMutation({
+    onSuccess() {
+      utils.downloads.prowlarrStatus.invalidate();
+      setProwlarrApiKey("");
+    },
+  });
+  const updateQbittorrentCredentials = trpc.admin.updateQbittorrentCredentials.useMutation({
+    onSuccess() {
+      utils.downloads.qbittorrentStatus.invalidate();
+      setQbitPassword("");
+    },
+  });
+  const ensureQbittorrentCategories = trpc.admin.ensureQbittorrentCategories.useMutation({
+    onSuccess() {
+      utils.downloads.qbittorrentStatus.invalidate();
+    },
+  });
   const createUser = trpc.users.create.useMutation({
     onSuccess() {
       utils.users.list.invalidate();
@@ -700,6 +723,10 @@ function AdminRoute() {
   const updateRole = trpc.users.updateRole.useMutation({ onSuccess: () => utils.users.list.invalidate() });
   const disableUser = trpc.users.disable.useMutation({ onSuccess: () => utils.users.list.invalidate() });
   const scanLibrary = trpc.library.scan.useMutation();
+  const [tmdbApiKey, setTmdbApiKey] = useState("");
+  const [prowlarrApiKey, setProwlarrApiKey] = useState("");
+  const [qbitUsername, setQbitUsername] = useState("");
+  const [qbitPassword, setQbitPassword] = useState("");
   const [createForm, setCreateForm] = useState({
     email: "",
     password: "",
@@ -716,6 +743,72 @@ function AdminRoute() {
           <StatusMetric label="qBittorrent" ok={qbit.data?.configured && qbit.data.reachable} />
           <Metric label="Cloud Providers" value={providers.data?.length ?? 0} />
         </div>
+        <Panel title="Provider Setup" action={<Cloud size={18} />}>
+          <div className="grid gap-3 xl:grid-cols-3">
+            <form
+              className="grid gap-2 rounded-md border border-border p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                updateTmdbApiKey.mutate({ apiKey: tmdbApiKey });
+              }}
+            >
+              <Field label="TMDB API key" value={tmdbApiKey} type="password" onChange={setTmdbApiKey} />
+              <Button disabled={updateTmdbApiKey.isPending}>Save TMDB</Button>
+              {updateTmdbApiKey.error ? <Notice>{updateTmdbApiKey.error.message}</Notice> : null}
+            </form>
+            <form
+              className="grid gap-2 rounded-md border border-border p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                updateProwlarrApiKey.mutate({ apiKey: prowlarrApiKey });
+              }}
+            >
+              <Field label="Prowlarr API key" value={prowlarrApiKey} type="password" onChange={setProwlarrApiKey} />
+              <Button disabled={updateProwlarrApiKey.isPending}>Save Prowlarr</Button>
+              {updateProwlarrApiKey.error ? <Notice>{updateProwlarrApiKey.error.message}</Notice> : null}
+            </form>
+            <form
+              className="grid gap-2 rounded-md border border-border p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                updateQbittorrentCredentials.mutate({ username: qbitUsername, password: qbitPassword });
+              }}
+            >
+              <Field label="qBittorrent username" value={qbitUsername} onChange={setQbitUsername} />
+              <Field label="qBittorrent password" value={qbitPassword} type="password" onChange={setQbitPassword} />
+              <div className="flex flex-wrap gap-2">
+                <Button disabled={updateQbittorrentCredentials.isPending}>Save qBit</Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={ensureQbittorrentCategories.isPending}
+                  onClick={() => ensureQbittorrentCategories.mutate()}
+                >
+                  Categories
+                </Button>
+              </div>
+              {updateQbittorrentCredentials.error ? (
+                <Notice>{updateQbittorrentCredentials.error.message}</Notice>
+              ) : null}
+              {ensureQbittorrentCategories.error ? <Notice>{ensureQbittorrentCategories.error.message}</Notice> : null}
+            </form>
+          </div>
+        </Panel>
+        <Panel title="Cloud Providers" action={<Cloud size={18} />}>
+          <DataState loading={providers.isLoading} error={providers.error?.message} empty={!providers.data?.length}>
+            <div className="grid gap-2 md:grid-cols-3">
+              {providers.data?.map((provider) => (
+                <div key={provider.id} className="rounded-md border border-border p-3">
+                  <div className="truncate text-sm">{provider.name}</div>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <Badge>{provider.enabled ? "Enabled" : "Disabled"}</Badge>
+                    <Badge>{provider.externalProvider}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DataState>
+        </Panel>
         <Panel title="Users" action={<Users size={18} />}>
           <form
             className="grid gap-2 xl:grid-cols-[1fr_1fr_1fr_10rem_auto]"

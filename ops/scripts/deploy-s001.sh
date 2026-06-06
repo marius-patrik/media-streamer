@@ -14,6 +14,12 @@ source .env
 set +a
 ops/scripts/preflight-s001.sh
 mkdir -p /mnt/HDD1/media-streamer /mnt/HDD1/downloads/incomplete /mnt/HDD1/downloads/complete /mnt/HDD1/backups/media-streamer
+ops/scripts/import-prowlarr-key-s001.sh
+ops/scripts/seed-qbittorrent-categories-s001.sh
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 archive="/home/patrik/media-streamer.archive.${stamp}.tar.gz"

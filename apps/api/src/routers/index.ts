@@ -1,4 +1,5 @@
 import { router } from "../trpc";
+import { adminRouter } from "./admin";
 import { authRouter } from "./auth";
 import { cloudRouter } from "./cloud";
 import { downloadsRouter } from "./downloads";
@@ -9,6 +10,7 @@ import { titlesRouter } from "./titles";
 import { usersRouter } from "./users";
 
 export const appRouter = router({
+  admin: adminRouter,
   auth: authRouter,
   cloud: cloudRouter,
   downloads: downloadsRouter,

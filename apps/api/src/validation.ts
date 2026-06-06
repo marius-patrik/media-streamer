@@ -190,6 +190,15 @@ const deleteDownloadJobSchema = v.object({
   deleteFiles: v.optional(v.boolean()),
 });
 
+const apiKeySettingSchema = v.object({
+  apiKey: v.pipe(v.string(), v.trim(), v.maxLength(1024)),
+});
+
+const qbittorrentCredentialsSchema = v.object({
+  username: v.pipe(v.string(), v.trim(), v.maxLength(128)),
+  password: v.pipe(v.string(), v.trim(), v.maxLength(1024)),
+});
+
 export type LoginInput = v.InferOutput<typeof loginSchema>;
 export type BootstrapInput = v.InferOutput<typeof bootstrapSchema>;
 export type CreateUserInput = v.InferOutput<typeof createUserSchema>;
@@ -217,6 +226,8 @@ export type AddMagnetDownloadInput = v.InferOutput<typeof addMagnetDownloadSchem
 export type StartCandidateDownloadInput = v.InferOutput<typeof startCandidateDownloadSchema>;
 export type DownloadJobIdInput = v.InferOutput<typeof downloadJobIdSchema>;
 export type DeleteDownloadJobInput = v.InferOutput<typeof deleteDownloadJobSchema>;
+export type ApiKeySettingInput = v.InferOutput<typeof apiKeySettingSchema>;
+export type QbittorrentCredentialsInput = v.InferOutput<typeof qbittorrentCredentialsSchema>;
 
 export const loginInputParser = {
   parse(input: unknown) {
@@ -377,5 +388,17 @@ export const downloadJobIdInputParser = {
 export const deleteDownloadJobInputParser = {
   parse(input: unknown) {
     return v.parse(deleteDownloadJobSchema, input);
+  },
+};
+
+export const apiKeySettingInputParser = {
+  parse(input: unknown) {
+    return v.parse(apiKeySettingSchema, input);
+  },
+};
+
+export const qbittorrentCredentialsInputParser = {
+  parse(input: unknown) {
+    return v.parse(qbittorrentCredentialsSchema, input);
   },
 };

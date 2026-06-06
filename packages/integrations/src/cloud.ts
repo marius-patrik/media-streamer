@@ -19,13 +19,31 @@ const placeholderPattern = /\{([A-Za-z0-9_]+)\}/g;
 
 export const defaultCloudProviderTemplates: CloudProviderTemplate[] = [
   {
-    id: "custom-embed",
-    name: "Custom Embed",
+    id: "custom-tmdb-primary",
+    name: "Custom TMDB Primary",
     enabled: false,
     rank: 0,
     externalProvider: "TMDB",
-    movieUrlTemplate: "https://example.com/movie/{externalId}",
-    episodeUrlTemplate: "https://example.com/tv/{externalId}/{season}/{episode}",
+    movieUrlTemplate: "https://example.com/embed/movie/{externalId}",
+    episodeUrlTemplate: "https://example.com/embed/tv/{externalId}/{season}/{episode}",
+  },
+  {
+    id: "custom-tmdb-secondary",
+    name: "Custom TMDB Secondary",
+    enabled: false,
+    rank: 10,
+    externalProvider: "TMDB",
+    movieUrlTemplate: "https://backup.example.com/movie/{externalId}",
+    episodeUrlTemplate: "https://backup.example.com/show/{externalId}/season/{season}/episode/{episode}",
+  },
+  {
+    id: "custom-cloud-provider",
+    name: "Custom Cloud Provider",
+    enabled: false,
+    rank: 20,
+    externalProvider: "CLOUD_PROVIDER",
+    movieUrlTemplate: "https://cloud.example.com/title/{externalId}",
+    episodeUrlTemplate: "https://cloud.example.com/title/{externalId}/s{season}/e{episode}",
   },
 ];
 
