@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Link, Route, Switch, useLocation, useRoute } from "wouter";
+import { Link, Route, Switch, useLocation, useRoute, useSearchParams } from "wouter";
 import "./styles.css";
 import { queryClient, trpc, trpcClient } from "./trpc";
 
@@ -468,8 +468,8 @@ function SourceList({ titleId, episodeId }: { titleId: string; episodeId: string
 }
 
 function PlayerRoute() {
-  const [location] = useLocation();
-  const params = useMemo(() => new URLSearchParams(location.split("?")[1] ?? ""), [location]);
+  const [, navigate] = useLocation();
+  const [params] = useSearchParams();
   const titleId = params.get("titleId") ?? "";
   const episodeId = params.get("episodeId");
   const requestedSourceId = params.get("sourceId");
@@ -497,12 +497,9 @@ function PlayerRoute() {
                   value={selected ? `${selected.type}:${selected.id}` : ""}
                   onChange={(event) => {
                     const [sourceType, sourceId] = event.currentTarget.value.split(":");
-                    window.history.pushState(
-                      null,
-                      "",
+                    navigate(
                       `/player?titleId=${titleId}${episodeId ? `&episodeId=${episodeId}` : ""}&sourceId=${sourceId}&sourceType=${sourceType}`,
                     );
-                    window.dispatchEvent(new PopStateEvent("popstate"));
                   }}
                 >
                   {sources.data?.sources.map((source) => (
