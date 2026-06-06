@@ -18,6 +18,8 @@ type LocalSourceRow = {
   relativePath: string;
   durationSeconds: number | null;
   container: string | null;
+  videoCodec: string | null;
+  audioCodec: string | null;
   subtitles: Array<{
     id: string;
     language: string | null;
@@ -61,6 +63,8 @@ export const playerRouter = router({
           relativePath: true,
           durationSeconds: true,
           container: true,
+          videoCodec: true,
+          audioCodec: true,
           subtitles: {
             select: { id: true, language: true, format: true },
             orderBy: { relativePath: "asc" },
@@ -169,6 +173,9 @@ export function serializePlayableSources(input: {
         label: asset.relativePath,
         streamUrl: `/stream/local/${encodeURIComponent(asset.id)}`,
         remuxUrl: `/stream/remux/${encodeURIComponent(asset.id)}`,
+        playbackUrl: shouldUseCompatibilityStream(asset)
+          ? `/stream/remux/${encodeURIComponent(asset.id)}`
+          : `/stream/local/${encodeURIComponent(asset.id)}`,
         subtitle: subtitle
           ? {
               id: subtitle.id,
@@ -179,6 +186,8 @@ export function serializePlayableSources(input: {
           : null,
         durationSeconds: asset.durationSeconds,
         container: asset.container,
+        videoCodec: asset.videoCodec,
+        audioCodec: asset.audioCodec,
       };
     }),
     ...input.downloads.map((job) => ({
@@ -197,6 +206,16 @@ export function serializePlayableSources(input: {
       rank: index,
     })),
   ];
+}
+
+function shouldUseCompatibilityStream(asset: Pick<LocalSourceRow, "container" | "videoCodec" | "audioCodec">) {
+  const container = asset.container?.toLowerCase() ?? "";
+  const videoCodec = asset.videoCodec?.toLowerCase() ?? "";
+  const audioCodec = asset.audioCodec?.toLowerCase() ?? "";
+  if (container === "mkv" || container.includes("matroska")) return true;
+  if (["truehd", "ac3", "eac3", "dts", "dca", "flac"].includes(audioCodec)) return true;
+  if (["hevc", "h265", "mpeg2video", "vc1"].includes(videoCodec)) return true;
+  return false;
 }
 
 function normalizeEpisodeId(input: PlayerSubjectInput) {

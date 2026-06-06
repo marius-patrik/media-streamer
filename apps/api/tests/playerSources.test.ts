@@ -8,6 +8,8 @@ describe("player source serialization", () => {
         {
           id: "asset/1",
           container: "mkv",
+          videoCodec: "hevc",
+          audioCodec: "truehd",
           durationSeconds: 123,
           relativePath: "Movies/Arrival/Arrival.mkv",
           subtitles: [{ id: "subtitle-1", format: "srt", language: "en" }],
@@ -19,6 +21,7 @@ describe("player source serialization", () => {
 
     expect(sources[0]).toMatchObject({
       id: "asset/1",
+      playbackUrl: "/stream/remux/asset%2F1",
       subtitle: {
         format: "srt",
         id: "subtitle-1",
@@ -35,6 +38,8 @@ describe("player source serialization", () => {
         {
           id: "asset-1",
           container: "mp4",
+          videoCodec: "h264",
+          audioCodec: "aac",
           durationSeconds: null,
           relativePath: "Movie.mp4",
           subtitles: [],
@@ -45,6 +50,7 @@ describe("player source serialization", () => {
     });
 
     expect(sources[0]).toMatchObject({
+      playbackUrl: "/stream/local/asset-1",
       streamUrl: "/stream/local/asset-1",
       subtitle: null,
       type: "LOCAL",

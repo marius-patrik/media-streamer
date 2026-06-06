@@ -13,8 +13,10 @@ import {
   Search,
   Settings,
   Users,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
-import React, { useMemo, useState } from "react";
+import React, { useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Link, Route, Switch, useLocation, useRoute, useSearchParams } from "wouter";
 import "./styles.css";
@@ -57,6 +59,8 @@ type PlayableSource = {
   id: string;
   label: string;
   streamUrl?: string;
+  remuxUrl?: string;
+  playbackUrl?: string;
   url?: string;
   status?: string;
   durationSeconds?: number | null;
@@ -558,20 +562,7 @@ function PlayerRoute() {
 function PlayerSurface({ source }: { source?: PlayableSource }) {
   if (!source) return <Notice>No playable source available.</Notice>;
   if (source.type === "LOCAL") {
-    return (
-      // biome-ignore lint/a11y/useMediaCaption: Captions are rendered when the selected local asset has a stored subtitle.
-      <video className="aspect-video w-full rounded-md border border-border bg-black" controls src={source.streamUrl}>
-        {source.subtitle ? (
-          <track
-            default
-            kind="subtitles"
-            label={source.subtitle.language ?? source.subtitle.format.toUpperCase()}
-            src={source.subtitle.url}
-            srcLang={source.subtitle.language ?? "und"}
-          />
-        ) : null}
-      </video>
-    );
+    return <CustomLocalPlayer source={source} />;
   }
   if (source.type === "CLOUD") {
     return (
@@ -583,6 +574,123 @@ function PlayerSurface({ source }: { source?: PlayableSource }) {
     );
   }
   return <Notice>{source.status ?? "Download source"} is tracked in the queue.</Notice>;
+}
+
+function CustomLocalPlayer({ source }: { source: PlayableSource }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [paused, setPaused] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(source.durationSeconds ?? 0);
+  const [volume, setVolume] = useState(1);
+  const src = source.playbackUrl ?? source.remuxUrl ?? source.streamUrl;
+
+  return (
+    <div className="overflow-hidden rounded-md border border-border bg-black">
+      <div className="relative bg-black">
+        {/* biome-ignore lint/a11y/useMediaCaption: Captions are rendered when the selected local asset has a stored subtitle. */}
+        <video
+          ref={videoRef}
+          className="aspect-video w-full bg-black"
+          playsInline
+          preload="metadata"
+          src={src}
+          tabIndex={0}
+          onClick={() => togglePlayback(videoRef.current)}
+          onKeyDown={(event) => {
+            if (event.key !== " " && event.key !== "Enter") return;
+            event.preventDefault();
+            togglePlayback(videoRef.current);
+          }}
+          onPlay={() => setPaused(false)}
+          onPause={() => setPaused(true)}
+          onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || source.durationSeconds || 0)}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onVolumeChange={(event) => {
+            setMuted(event.currentTarget.muted);
+            setVolume(event.currentTarget.volume);
+          }}
+        >
+          {source.subtitle ? (
+            <track
+              default
+              kind="subtitles"
+              label={source.subtitle.language ?? source.subtitle.format.toUpperCase()}
+              src={source.subtitle.url}
+              srcLang={source.subtitle.language ?? "und"}
+            />
+          ) : null}
+        </video>
+      </div>
+      <div className="grid gap-3 bg-sidebar/95 p-3">
+        <input
+          aria-label="Seek"
+          className="h-2 w-full accent-primary"
+          type="range"
+          min="0"
+          max={Math.max(duration, 1)}
+          value={Math.min(currentTime, Math.max(duration, 1))}
+          onChange={(event) => {
+            const nextTime = Number(event.currentTarget.value);
+            if (videoRef.current) videoRef.current.currentTime = nextTime;
+            setCurrentTime(nextTime);
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" onClick={() => togglePlayback(videoRef.current)}>
+            {paused ? "Play" : "Pause"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              if (!videoRef.current) return;
+              videoRef.current.muted = !videoRef.current.muted;
+            }}
+          >
+            {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          </Button>
+          <input
+            aria-label="Volume"
+            className="w-28 accent-primary"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={muted ? 0 : volume}
+            onChange={(event) => {
+              if (!videoRef.current) return;
+              const nextVolume = Number(event.currentTarget.value);
+              videoRef.current.volume = nextVolume;
+              videoRef.current.muted = nextVolume === 0;
+            }}
+          />
+          <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+            {formatPlaybackTime(currentTime)} / {formatPlaybackTime(duration)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function togglePlayback(video: HTMLVideoElement | null) {
+  if (!video) return;
+  if (video.paused) {
+    void video.play();
+    return;
+  }
+  video.pause();
+}
+
+function formatPlaybackTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
+  const whole = Math.floor(seconds);
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const remainingSeconds = whole % 60;
+  if (hours) return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
 function DownloadsRoute() {
