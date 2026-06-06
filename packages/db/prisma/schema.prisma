@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  DOWNLOADER
+  VIEWER
+}
+
+enum TitleKind {
+  MOVIE
+  SHOW
+}
+
+enum CreatedFrom {
+  LOCAL_SCAN
+  TMDB
+  CLOUD
+  DOWNLOAD_SEARCH
+  MANUAL
+}
+
+enum MatchStatus {
+  MATCHED
+  UNMATCHED
+  NEEDS_REVIEW
+}
+
+enum ExternalProvider {
+  TMDB
+  PROWLARR
+  CLOUD_PROVIDER
+}
+
+enum ScanStatus {
+  IMPORTED
+  NEEDS_REVIEW
+  MISSING
+}
+
+enum DownloadClient {
+  QBITTORRENT
+}
+
+enum DownloadStatus {
+  SEARCHED
+  QUEUED
+  DOWNLOADING
+  COMPLETED
+  IMPORTING
+  IMPORTED
+  FAILED
+  NEEDS_REVIEW
+}
+
+enum CandidateSource {
+  PROWLARR
+  MAGNET
+  TORRENT_UPLOAD
+}
+
+enum SourceType {
+  LOCAL
+  DOWNLOAD
+  CLOUD
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  displayName  String
+  passwordHash String
+  role         UserRole @default(VIEWER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  disabledAt   DateTime?
+  sessions     Session[]
+  downloads    DownloadJob[] @relation("DownloadCreatedBy")
+  states       UserTitleState[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Title {
+  id           String      @id @default(cuid())
+  kind         TitleKind
+  name         String
+  year         Int?
+  overview     String?
+  posterPath   String?
+  backdropPath String?
+  createdFrom  CreatedFrom
+  matchStatus  MatchStatus @default(UNMATCHED)
+  episodes     Episode[]
+  externalIds  ExternalId[]
+  localAssets  LocalAsset[]
+  cloudSources CloudSource[]
+  downloads    DownloadJob[]
+  candidates   SearchCandidate[]
+  states       UserTitleState[]
+
+  @@index([name])
+  @@index([kind, year])
+}
+
+model Episode {
+  id            String @id @default(cuid())
+  titleId       String
+  seasonNumber  Int
+  episodeNumber Int
+  name          String?
+  overview      String?
+  title         Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  externalIds   ExternalId[]
+  localAssets   LocalAsset[]
+  cloudSources  CloudSource[]
+  downloads     DownloadJob[]
+  candidates    SearchCandidate[]
+  states        UserTitleState[]
+
+  @@unique([titleId, seasonNumber, episodeNumber])
+}
+
+model ExternalId {
+  id        String           @id @default(cuid())
+  titleId   String
+  episodeId String?
+  provider  ExternalProvider
+  value     String
+  title     Title            @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode   Episode?         @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, value])
+  @@index([titleId])
+  @@index([episodeId])
+}
+
+model LocalAsset {
+  id             String     @id @default(cuid())
+  titleId        String
+  episodeId      String?
+  relativePath   String
+  absolutePath   String
+  sizeBytes      BigInt
+  container      String?
+  videoCodec     String?
+  audioCodec     String?
+  durationSeconds Int?
+  importedAt     DateTime   @default(now())
+  scanStatus     ScanStatus @default(IMPORTED)
+  title          Title      @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode        Episode?   @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  importedJobs   DownloadJob[] @relation("ImportedAsset")
+  subtitles      Subtitle[]
+
+  @@unique([absolutePath])
+  @@index([titleId])
+  @@index([episodeId])
+}
+
+model Subtitle {
+  id           String     @id @default(cuid())
+  assetId      String
+  relativePath String
+  absolutePath String
+  language     String?
+  format       String
+  asset        LocalAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, absolutePath])
+  @@index([assetId])
+}
+
+model CloudSource {
+  id        String   @id @default(cuid())
+  titleId   String
+  episodeId String?
+  provider  String
+  url       String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  title     Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode   Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([titleId])
+  @@index([episodeId])
+}
+
+model DownloadJob {
+  id             String         @id @default(cuid())
+  titleId        String
+  episodeId      String?
+  client         DownloadClient @default(QBITTORRENT)
+  clientHash     String?
+  name           String
+  magnetUri      String?
+  status         DownloadStatus @default(SEARCHED)
+  progress       Float          @default(0)
+  downloadPath   String?
+  importedAssetId String?
+  createdByUserId String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  title          Title          @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode        Episode?       @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  importedAsset  LocalAsset?    @relation("ImportedAsset", fields: [importedAssetId], references: [id], onDelete: SetNull)
+  createdBy      User?          @relation("DownloadCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([titleId])
+  @@index([episodeId])
+  @@index([clientHash])
+  @@index([status])
+}
+
+model SearchCandidate {
+  id        String          @id @default(cuid())
+  titleId   String
+  episodeId String?
+  source    CandidateSource
+  name      String
+  magnetUri String?
+  sizeBytes BigInt?
+  seeders   Int?
+  leechers  Int?
+  quality   String?
+  trusted   Boolean @default(false)
+  createdAt DateTime @default(now())
+  title     Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode   Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+
+  @@index([titleId])
+  @@index([episodeId])
+  @@index([source])
+}
+
+model UserTitleState {
+  id              String  @id @default(cuid())
+  userId          String
+  titleId         String
+  episodeId       String?
+  subjectKey      String
+  progressSeconds Int     @default(0)
+  durationSeconds Int?
+  lastSourceType  SourceType?
+  lastSourceId    String?
+  favorite        Boolean @default(false)
+  hidden          Boolean @default(false)
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           Title   @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode         Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, subjectKey])
+  @@index([titleId])
+  @@index([episodeId])
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

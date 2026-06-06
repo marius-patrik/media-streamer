@@ -1,0 +1,20 @@
+{
+  "name": "@tailstreamer/db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "DATABASE_URL=postgresql://tailstreamer:tailstreamer@localhost:5432/tailstreamer prisma validate --schema prisma/schema.prisma",
+    "generate": "DATABASE_URL=postgresql://tailstreamer:tailstreamer@localhost:5432/tailstreamer prisma generate --schema prisma/schema.prisma",
+    "typecheck": "tsc --noEmit",
+    "prisma:validate": "DATABASE_URL=postgresql://tailstreamer:tailstreamer@localhost:5432/tailstreamer prisma validate --schema prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  }
+}

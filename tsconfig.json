@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "jsx": "react-jsx",
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@tailstreamer/domain": ["packages/domain/src/index.ts"],
+      "@tailstreamer/auth": ["packages/auth/src/index.ts"],
+      "@tailstreamer/api/router": ["apps/api/src/routers/index.ts"],
+      "@tailstreamer/integrations": ["packages/integrations/src/index.ts"],
+      "@tailstreamer/media": ["packages/media/src/index.ts"],
+      "@tailstreamer/ui/*": ["packages/ui/src/*", "packages/ui/*"]
+    },
+    "types": ["bun"]
+  },
+  "include": ["apps", "packages", "scripts", "tests"]
+}

@@ -1,0 +1,12 @@
+name: deploy-s001
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, s001, media-streamer, docker]
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - run: ops/scripts/deploy-s001.sh

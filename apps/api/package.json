@@ -1,0 +1,22 @@
+{
+  "name": "@tailstreamer/api",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./router": "./src/routers/index.ts"
+  },
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "build": "bun build src/main.ts --outdir ../../dist/api --target bun",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tailstreamer/auth": "workspace:*",
+    "@tailstreamer/db": "workspace:*",
+    "@tailstreamer/domain": "workspace:*",
+    "@tailstreamer/integrations": "workspace:*",
+    "@tailstreamer/media": "workspace:*",
+    "@trpc/server": "^10.45.2",
+    "valibot": "^1.1.0"
+  }
+}

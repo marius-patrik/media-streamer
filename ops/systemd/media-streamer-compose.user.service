@@ -1,0 +1,16 @@
+[Unit]
+Description=TailStreamer Docker Compose stack
+After=default.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/patrik/media-streamer/ops/docker
+EnvironmentFile=/home/patrik/media-streamer/.env
+Environment=PATH=/run/wrappers/bin:/run/current-system/sw/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/run/current-system/sw/bin/bash /home/patrik/media-streamer/ops/scripts/compose-up-s001.sh
+ExecStop=/run/current-system/sw/bin/bash /home/patrik/media-streamer/ops/scripts/compose-down-s001.sh
+TimeoutStartSec=0
+
+[Install]
+WantedBy=default.target

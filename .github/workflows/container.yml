@@ -1,0 +1,13 @@
+name: container
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  container-smoke:
+    runs-on: [self-hosted, s001, media-streamer, docker]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ops/scripts/container-smoke.sh

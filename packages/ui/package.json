@@ -1,0 +1,26 @@
+{
+  "name": "@tailstreamer/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./components/button": "./src/components/button.tsx",
+    "./lib/utils": "./src/lib/utils.ts",
+    "./tailwind-preset": "./tailwind-preset.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.1.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "react": "^18.3.1",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss": "^3.4.17",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@tailstreamer/auth",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@tailstreamer/domain": "workspace:*",
+    "argon2": "^0.41.1"
+  }
+}

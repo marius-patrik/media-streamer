@@ -1,0 +1,85 @@
+name: tailstreamer
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-tailstreamer}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tailstreamer}}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:?set BOOTSTRAP_SECRET}
+      MEDIA_ROOT: /media
+      DOWNLOAD_INCOMPLETE: /downloads/incomplete
+      DOWNLOAD_COMPLETE: /downloads/complete
+      QB_URL: http://qbittorrent:8080
+      QB_USERNAME: ${QB_USERNAME:-}
+      QB_PASSWORD: ${QB_PASSWORD:-}
+      PROWLARR_URL: http://prowlarr:9696
+      PROWLARR_API_KEY: ${PROWLARR_API_KEY:-}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      PORT: 8080
+      WEB_DIST: dist/web
+    ports:
+      - "${APP_HOST_PORT:-8090}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qbittorrent:
+        condition: service_started
+      prowlarr:
+        condition: service_started
+    volumes:
+      - ${MEDIA_ROOT_HOST:-/mnt/HDD1/media}:/media
+      - ${DOWNLOADS_ROOT_HOST:-/mnt/HDD1/downloads}:/downloads
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tailstreamer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-tailstreamer}
+    volumes:
+      - ${STATE_ROOT_HOST:-/mnt/HDD1/media-streamer}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Prague}
+      WEBUI_PORT: 8080
+    volumes:
+      - ${STATE_ROOT_HOST:-/mnt/HDD1/media-streamer}/qbittorrent:/config
+      - ${DOWNLOADS_ROOT_HOST:-/mnt/HDD1/downloads}:/downloads
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Prague}
+    volumes:
+      - ${STATE_ROOT_HOST:-/mnt/HDD1/media-streamer}/prowlarr:/config
+
+  ci-runner:
+    image: ghcr.io/actions/actions-runner:latest
+    profiles: ["runner"]
+    command: ["./run.sh"]
+    volumes:
+      - ${STATE_ROOT_HOST:-/mnt/HDD1/media-streamer}/runner:/home/runner
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      RUNNER_LABELS: self-hosted,s001,media-streamer,docker
+
+networks:
+  default:
+    name: ${COMPOSE_NETWORK_NAME:-tailstreamer}
