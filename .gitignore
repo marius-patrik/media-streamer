@@ -2,5 +2,6 @@ node_modules
 dist
 .env
 .env.local
+.admin-temp-password
 coverage
 *.log
