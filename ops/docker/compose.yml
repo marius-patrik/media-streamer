@@ -11,6 +11,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-tailstreamer}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tailstreamer}}
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:?set BOOTSTRAP_SECRET}
       MEDIA_ROOT: /media
       DOWNLOAD_INCOMPLETE: /downloads/incomplete

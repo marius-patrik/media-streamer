@@ -2,6 +2,7 @@ export type ApiEnv = {
   port: number;
   sessionSecret: string;
   bootstrapSecret: string;
+  sessionCookieSecure: boolean;
   production: boolean;
   webDist: string;
   mediaRoot: string;
@@ -28,6 +29,7 @@ export function readEnv(input = process.env): ApiEnv {
     port: Number(input.PORT ?? 8080),
     sessionSecret: sessionSecret || "development-session-secret-32-bytes-min",
     bootstrapSecret: bootstrapSecret || "development-bootstrap-secret",
+    sessionCookieSecure: parseBoolean(input.SESSION_COOKIE_SECURE, production),
     production,
     webDist: input.WEB_DIST || "dist/web",
     mediaRoot: input.MEDIA_ROOT || "/media",
@@ -40,4 +42,12 @@ export function readEnv(input = process.env): ApiEnv {
     qbittorrentUsername: input.QB_USERNAME?.trim() || null,
     qbittorrentPassword: input.QB_PASSWORD?.trim() || null,
   };
+}
+
+function parseBoolean(value: string | undefined, fallback: boolean) {
+  if (value === undefined || value.trim() === "") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
 }

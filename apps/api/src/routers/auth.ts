@@ -71,7 +71,7 @@ export const authRouter = router({
 });
 
 async function createSessionCookie(
-  ctx: { env: { sessionSecret: string; production: boolean }; responseHeaders: Headers },
+  ctx: { env: { sessionSecret: string; sessionCookieSecure: boolean }; responseHeaders: Headers },
   userId: string,
 ) {
   const token = createSessionToken();
@@ -83,5 +83,8 @@ async function createSessionCookie(
       expiresAt,
     },
   });
-  ctx.responseHeaders.append("set-cookie", serializeSessionCookie(token, { expiresAt, secure: ctx.env.production }));
+  ctx.responseHeaders.append(
+    "set-cookie",
+    serializeSessionCookie(token, { expiresAt, secure: ctx.env.sessionCookieSecure }),
+  );
 }
