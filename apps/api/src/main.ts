@@ -3,12 +3,14 @@ import { join, normalize } from "node:path";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { createContext } from "./context";
 import { readEnv } from "./env";
+import { startAutomaticLibraryScan } from "./libraryScan";
 import { appRouter } from "./routers";
 import { createPrismaStreamAssetRepository } from "./streamRepository";
 import { handleLocalAssetStream, handleRemuxAssetStream, handleSubtitleStream } from "./streaming";
 
 const env = readEnv();
 const streamRepository = createPrismaStreamAssetRepository();
+startAutomaticLibraryScan(env);
 
 Bun.serve({
   port: env.port,

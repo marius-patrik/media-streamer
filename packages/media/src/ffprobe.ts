@@ -11,11 +11,15 @@ export async function probeMediaFile(
   path: string,
   spawn: FfprobeSpawner = defaultFfprobeSpawner,
 ): Promise<ProbeResult> {
-  const process = spawn(buildFfprobeArgs(path));
-  const output = await new Response(process.stdout).text();
-  const exitCode = await process.exited;
-  if (exitCode !== 0) return {};
-  return parseFfprobeOutput(output);
+  try {
+    const process = spawn(buildFfprobeArgs(path));
+    const output = await new Response(process.stdout).text();
+    const exitCode = await process.exited;
+    if (exitCode !== 0) return {};
+    return parseFfprobeOutput(output);
+  } catch {
+    return {};
+  }
 }
 
 export function buildFfprobeArgs(path: string) {
@@ -23,7 +27,7 @@ export function buildFfprobeArgs(path: string) {
 }
 
 export function parseFfprobeOutput(output: string): ProbeResult {
-  const payload = JSON.parse(output) as {
+  const payload = JSON.parse(output || "{}") as {
     format?: { format_name?: string; duration?: string };
     streams?: Array<{ codec_type?: string; codec_name?: string }>;
   };

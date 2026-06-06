@@ -8,6 +8,7 @@ export type ApiEnv = {
   mediaRoot: string;
   downloadIncomplete: string;
   downloadComplete: string;
+  autoScanOnStart: boolean;
   tmdbApiKey: string | null;
   prowlarrUrl: string;
   prowlarrApiKey: string | null;
@@ -35,6 +36,7 @@ export function readEnv(input = process.env): ApiEnv {
     mediaRoot: input.MEDIA_ROOT || "/media",
     downloadIncomplete: input.DOWNLOAD_INCOMPLETE || "/downloads/incomplete",
     downloadComplete: input.DOWNLOAD_COMPLETE || "/downloads/complete",
+    autoScanOnStart: parseBoolean(input.AUTO_SCAN_ON_START, true),
     tmdbApiKey: input.TMDB_API_KEY?.trim() || null,
     prowlarrUrl: input.PROWLARR_URL || "http://prowlarr:9696",
     prowlarrApiKey: input.PROWLARR_API_KEY?.trim() || null,

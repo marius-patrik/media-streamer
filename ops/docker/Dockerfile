@@ -11,6 +11,9 @@ RUN bun run build
 
 FROM oven/bun:1.3.11
 WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app /app
 ENV NODE_ENV=production
 ENV PORT=8080

@@ -16,6 +16,7 @@ services:
       MEDIA_ROOT: /media
       DOWNLOAD_INCOMPLETE: /downloads/incomplete
       DOWNLOAD_COMPLETE: /downloads/complete
+      AUTO_SCAN_ON_START: ${AUTO_SCAN_ON_START:-true}
       QB_URL: http://qbittorrent:8080
       QB_USERNAME: ${QB_USERNAME:-}
       QB_PASSWORD: ${QB_PASSWORD:-}
